@@ -21,6 +21,7 @@ export function PracticePage() {
   const [queue, setQueue] = useState<{ letterId: string; format: string }[]>([])
   const [sessionStats, setSessionStats] = useState({ done: 0, correct: 0 })
   const [ready, setReady] = useState(false)
+  const [awaitingContinue, setAwaitingContinue] = useState(false)
 
   const loadQueue = useCallback(async () => {
     if (!settings) return
@@ -58,6 +59,7 @@ export function PracticePage() {
     setExercise(null)
     setQueue([])
     setSessionStats({ done: 0, correct: 0 })
+    setAwaitingContinue(false)
     loadQueue().then((items) => {
       if (items && items.length > 0) {
         nextExercise(items)
@@ -91,9 +93,11 @@ export function PracticePage() {
       done: s.done + 1,
       correct: s.correct + (correct ? 1 : 0),
     }))
+    setAwaitingContinue(true)
   }
 
   const handleNext = () => {
+    setAwaitingContinue(false)
     nextExercise()
   }
 
@@ -153,13 +157,15 @@ export function PracticePage() {
             onAnswer={handleAnswer}
             onContinue={handleNext}
           />
-          <button
-            type="button"
-            onClick={handleNext}
-            className="mt-4 w-full rounded-xl border border-slate-700 py-3 text-sm text-slate-300 hover:bg-slate-800"
-          >
-            Skip → Next
-          </button>
+          {!awaitingContinue && (
+            <button
+              type="button"
+              onClick={handleNext}
+              className="mt-4 w-full rounded-xl border border-slate-700 py-3 text-sm text-slate-300 hover:bg-slate-800"
+            >
+              Skip → Next
+            </button>
+          )}
         </div>
       ) : (
         <p className="text-slate-400">No exercises available.</p>
