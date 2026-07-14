@@ -40,7 +40,7 @@ Polish has **7 digraphs** — two-letter combinations representing a single soun
 
 ## Audio
 
-Example-word recordings from Wikimedia Commons pronunciation files (see `public/audio/ATTRIBUTION.md`).
+Exercise audio plays the **isolated digraph sound** only (trimmed from the start of example words on Wikimedia Commons — e.g. the /dʐ/ in *dżinsy*, not the full word *dżem*). Regenerate clips with `scripts/fetch-digraph-audio.py`.
 
 ---
 

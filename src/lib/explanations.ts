@@ -78,13 +78,16 @@ export function buildAnswerReview(params: {
   // Always explain the correct answer
   const heardName =
     params.format === 'hear-pick-letter' || params.format === 'hear-type-letter'
+  const isDigraph = correct.category === 'digraph'
   items.push({
     unitId: correct.id,
     label: correct.upper,
     status: 'correct',
     heading: `✓ ${correct.upper} is correct`,
     body: heardName
-      ? `You heard "${correct.polishName}" — the Polish name for ${correct.upper}. ${unitSummary(correct)} ${correct.tips[0] ?? ''}`.trim()
+      ? isDigraph
+        ? `You heard the ${correct.upper} sound (${correct.ipa}), not a full word. Type the digraph "${correct.lower}". ${correct.tips[0] ?? ''}`.trim()
+        : `You heard "${correct.polishName}" — the Polish name for ${correct.upper}. ${unitSummary(correct)} ${correct.tips[0] ?? ''}`.trim()
       : `${unitSummary(correct)} ${correct.tips[0] ?? ''}`.trim(),
   })
 
