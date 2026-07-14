@@ -51,3 +51,15 @@ npm run preview  # preview production build
 ## Tech stack
 
 React 19 · Vite · TypeScript · Tailwind CSS 4 · Dexie (IndexedDB) · vite-plugin-pwa
+
+## Live site
+
+**https://eriksik2.github.io/polish/**
+
+Deployed automatically from `main` via GitHub Actions to the `gh-pages` branch. If the site is not live yet:
+
+1. Make the repository **public** (required for free GitHub Pages)
+2. Go to **Settings → Pages**
+3. Under **Build and deployment**, choose **Deploy from a branch**
+4. Select branch **gh-pages**, folder **/ (root)**
+5. Save — the site should be available within a minute
