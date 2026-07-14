@@ -77,5 +77,9 @@ export function isDigraphModule(moduleId: string): boolean {
   return moduleId === 'digraphs'
 }
 
+export function resolveUnitModule(unitId: string): 'alphabet' | 'digraphs' {
+  return POLISH_DIGRAPHS.some((d) => d.id === unitId) ? 'digraphs' : 'alphabet'
+}
+
 // Legacy exports used by alphabet.ts distractor helpers
 export { getDistractorLabels, getDistractorLetters }

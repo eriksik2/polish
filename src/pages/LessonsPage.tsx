@@ -1,29 +1,40 @@
 import { useSearchParams } from 'react-router-dom'
 import { getModuleUnits, getUnit, getGeneralLesson } from '../data/moduleRegistry'
-import { UnitGrid } from '../components/LessonDrawer'
+import { UnitGrid, WordGrid, getKnowledgeWords } from '../components/LessonDrawer'
 import { useLessonDrawer } from '../context/LessonDrawerContext'
 import { useSettings } from '../hooks/useSettings'
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { getModuleInfo } from '../data/moduleRegistry'
 
 export function LessonsPage() {
   const [params] = useSearchParams()
   const moduleId = params.get('module') ?? 'alphabet'
   const moduleInfo = getModuleInfo(moduleId)
-  const { openLesson, openGeneralLesson } = useLessonDrawer()
+  const { openLesson, openWord, openGeneralLesson } = useLessonDrawer()
   const { settings } = useSettings()
+  const [wordFilter, setWordFilter] = useState('')
   const [selected, setSelected] = useState<string | null>(null)
 
   const units = getModuleUnits(moduleId)
   const generalLesson = getGeneralLesson(moduleId)
   const unit = selected ? getUnit(moduleId, selected) : null
+  const allWords = useMemo(() => getKnowledgeWords(moduleId), [moduleId])
+  const filteredWords = useMemo(() => {
+    const q = wordFilter.trim().toLowerCase()
+    if (!q) return allWords
+    return allWords.filter(
+      (w) =>
+        w.word.toLowerCase().includes(q) ||
+        w.meaning.toLowerCase().includes(q),
+    )
+  }, [allWords, wordFilter])
 
   return (
     <div className="p-4 space-y-6">
       <header>
-        <h1 className="text-xl font-bold">Lessons</h1>
+        <h1 className="text-xl font-bold">Knowledge</h1>
         <p className="text-sm text-slate-400">
-          {moduleInfo?.title ?? moduleId} — {units.length} items
+          {moduleInfo?.title ?? moduleId} — letters, digraphs & vocabulary
         </p>
       </header>
 
@@ -34,18 +45,40 @@ export function LessonsPage() {
           className="w-full rounded-2xl border border-red-500/30 bg-red-500/10 p-4 text-left"
         >
           <h2 className="font-semibold text-red-400">{generalLesson.title}</h2>
-          <p className="text-sm text-slate-400 mt-1">Overview and how to use this module</p>
+          <p className="text-sm text-slate-400 mt-1">Module overview and study tips</p>
         </button>
       )}
 
       <section>
-        <h2 className="text-sm font-medium text-slate-400 mb-3">All items</h2>
+        <h2 className="text-sm font-medium text-slate-400 mb-3">
+          Letters & digraphs ({units.length})
+        </h2>
         <UnitGrid
           moduleId={moduleId}
           onSelect={(id) => {
             setSelected(id)
             openLesson(moduleId, [id])
           }}
+        />
+      </section>
+
+      <section>
+        <div className="flex items-center justify-between gap-2 mb-3">
+          <h2 className="text-sm font-medium text-slate-400">
+            Words ({allWords.length})
+          </h2>
+        </div>
+        <input
+          type="search"
+          value={wordFilter}
+          onChange={(e) => setWordFilter(e.target.value)}
+          placeholder="Search words…"
+          className="mb-3 w-full rounded-xl border border-slate-700 bg-slate-800 px-3 py-2 text-sm focus:border-red-500 focus:outline-none"
+        />
+        <WordGrid
+          moduleId={moduleId}
+          words={filteredWords}
+          onSelect={(id) => openWord(moduleId, id)}
         />
       </section>
 

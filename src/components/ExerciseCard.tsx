@@ -20,6 +20,7 @@ import { AnswerReview } from './AnswerReview'
 import { HighlightedWord } from './HighlightedWord'
 import { SpeechWaveform } from './SpeechWaveform'
 import { buildAnswerReview } from '../lib/explanations'
+import { playCorrectAnswerAudio } from '../lib/answerAudio'
 
 interface ExerciseCardProps {
   exercise: Exercise
@@ -266,6 +267,7 @@ export function ExerciseCard({ exercise, onAnswer, onContinue }: ExerciseCardPro
     setAnswerCorrect(correct)
     setSubmitted(true)
     showFeedback(correct, message)
+    playCorrectAnswerAudio(exercise)
     onAnswer(correct, Date.now() - startTime, meta)
   }
 
@@ -418,7 +420,7 @@ export function ExerciseCard({ exercise, onAnswer, onContinue }: ExerciseCardPro
             onClick={() => openLesson(exercise.moduleId, [exercise.letterId])}
             className="shrink-0 rounded-lg bg-slate-800 px-2.5 py-1 text-xs text-red-400"
           >
-            📖 Lesson
+            📖 Info
           </button>
         </div>
 
@@ -705,7 +707,7 @@ export function ExerciseCard({ exercise, onAnswer, onContinue }: ExerciseCardPro
 
         {submitted && (
           <div ref={continueRef} className="mt-4 space-y-3 border-t border-slate-800 pt-4">
-            <AnswerReview items={reviewItems} />
+            <AnswerReview items={reviewItems} moduleId={exercise.moduleId} />
             <button
               type="button"
               onClick={onContinue}

@@ -71,7 +71,7 @@ export function HomePage() {
                     to={`/lessons?module=${mod.id}`}
                     className="rounded-lg bg-slate-900 px-2 py-1 text-slate-400"
                   >
-                    Lessons
+                    Knowledge
                   </Link>
                 </div>
               )}

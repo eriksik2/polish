@@ -172,7 +172,7 @@ export function PracticePage() {
           onClick={() => openGeneralLesson(moduleId)}
           className="rounded-lg bg-slate-800 px-3 py-1.5 text-xs text-slate-300"
         >
-          📖 General lesson
+          📖 Overview
         </button>
       </div>
 

@@ -1,6 +1,6 @@
 import type { ExerciseFormat } from '../data/modules'
 import { getWord } from '../data/wordBank'
-import { getModuleUnits, getUnit, type PolishLetter } from '../data/moduleRegistry'
+import { getModuleUnits, getUnit, resolveUnitModule, type PolishLetter } from '../data/moduleRegistry'
 import { renderHighlightedWord, wordContainsUnit } from './graphemes'
 import { similarityScore } from './similarity'
 import { scorePronunciation } from './speech/stt'
@@ -9,10 +9,52 @@ export type ReviewStatus = 'correct' | 'your-answer' | 'wrong-option'
 
 export interface ReviewItem {
   unitId?: string
+  unitModuleId?: string
+  wordId?: string
   label: string
   status: ReviewStatus
   heading: string
   body: string
+}
+
+function unitReview(
+  unit: PolishLetter,
+  moduleId: string,
+  item: Omit<ReviewItem, 'unitId' | 'unitModuleId' | 'label'> & { label?: string },
+): ReviewItem {
+  return {
+    unitId: unit.id,
+    unitModuleId: moduleId,
+    label: item.label ?? unit.upper,
+    ...item,
+  }
+}
+
+function wordReview(
+  word: { id: string; word: string },
+  item: Omit<ReviewItem, 'wordId' | 'label'> & { label?: string },
+): ReviewItem {
+  return {
+    wordId: word.id,
+    label: item.label ?? word.word,
+    ...item,
+  }
+}
+
+function enrichReviewItem(item: ReviewItem, _fallbackModuleId: string): ReviewItem {
+  const enriched = { ...item }
+  if (enriched.unitId && !enriched.unitModuleId) {
+    enriched.unitModuleId = resolveUnitModule(enriched.unitId)
+  }
+  if (enriched.wordId && !enriched.label) {
+    const w = getWord(enriched.wordId)
+    if (w) enriched.label = w.word
+  }
+  return enriched
+}
+
+function finalize(items: ReviewItem[], moduleId: string): ReviewItem[] {
+  return items.map((i) => enrichReviewItem(i, moduleId))
 }
 
 function compareUnits(correct: PolishLetter, other: PolishLetter): string {
@@ -86,29 +128,27 @@ export function buildAnswerReview(params: {
 
   // Word-matching formats
   if (params.format === 'unit-pick-word' || params.format === 'hear-unit-pick-word') {
-    items.push({
-      unitId: correct.id,
-      label: correct.upper,
+    items.push(unitReview(correct, params.moduleId, {
       status: 'correct',
       heading: `✓ Find a word with ${correct.upper}`,
       body: `${correct.upper} (${correct.englishApprox}) — choose a word whose spelling includes this grapheme.`,
-    })
+    }))
 
     const correctWordId = params.targetWordId
     const correctW = correctWordId ? getWord(correctWordId) : undefined
     if (correctW) {
-      items.push({
-        label: correctW.word,
+      items.push(wordReview(correctW, {
         status: 'correct',
         heading: `✓ ${correctW.word} (${correctW.meaning})`,
         body: `Graphemes: ${correctW.graphemes.join(' · ')} — includes ${correct.upper}.`,
-      })
+      }))
     }
 
     const selectedWordId = params.selectedUnitId
     if (selectedWordId && selectedWordId !== correctWordId) {
       const picked = getWord(selectedWordId)
       items.push({
+        wordId: picked?.id ?? selectedWordId,
         label: picked?.word ?? selectedWordId,
         status: 'your-answer',
         heading: `Your choice: ${picked?.word ?? selectedWordId}`,
@@ -125,6 +165,7 @@ export function buildAnswerReview(params: {
       if (opt.wordId === selectedWordId) continue
       const w = getWord(opt.wordId)
       items.push({
+        wordId: opt.wordId,
         label: opt.label,
         status: 'wrong-option',
         heading: `${opt.label} — why not`,
@@ -133,7 +174,7 @@ export function buildAnswerReview(params: {
           : 'Does not contain the target grapheme.',
       })
     }
-    return items
+    return finalize(items, params.moduleId)
   }
 
   if (params.format === 'word-pick-unit' && targetWord && params.highlightIndex !== undefined) {
@@ -176,17 +217,20 @@ export function buildAnswerReview(params: {
         })
       }
     }
-    return items
+    return finalize(items, params.moduleId)
   }
 
   if (params.format === 'hear-word-pick-letter' && targetWord) {
-    items.push({
-      unitId: correct.id,
-      label: correct.upper,
+    items.push(wordReview(targetWord, {
+      status: 'correct',
+      heading: `✓ Word: ${targetWord.word} (${targetWord.meaning})`,
+      body: `Graphemes: ${targetWord.graphemes.join(' · ')}.`,
+    }))
+    items.push(unitReview(correct, params.moduleId, {
       status: 'correct',
       heading: `✓ ${correct.upper} is in "${targetWord.word}"`,
-      body: `"${targetWord.word}" (${targetWord.meaning}) contains ${correct.upper} (${correct.ipa}). Graphemes: ${targetWord.graphemes.join(' · ')}.`,
-    })
+      body: `"${targetWord.word}" (${targetWord.meaning}) contains ${correct.upper} (${correct.ipa}).`,
+    }))
 
     const selectedId = params.selectedUnitId
     if (selectedId && selectedId !== correct.id) {
@@ -215,17 +259,16 @@ export function buildAnswerReview(params: {
         })
       }
     }
-    return items
+    return finalize(items, params.moduleId)
   }
 
   if (params.format === 'hear-word-build-sequence' && targetWord && params.correctSequence) {
     const seq = params.correctSequence.join(' · ')
-    items.push({
-      label: targetWord.word,
+    items.push(wordReview(targetWord, {
       status: 'correct',
       heading: `✓ ${targetWord.word} (${targetWord.meaning})`,
       body: `Grapheme sequence: ${seq}`,
-    })
+    }))
     if (params.builtSequence && !params.answerCorrect) {
       items.push({
         label: params.builtSequence.join(''),
@@ -234,25 +277,25 @@ export function buildAnswerReview(params: {
         body: `Correct order: ${seq}.`,
       })
     }
-    return items
+    return finalize(items, params.moduleId)
   }
 
   if (params.format === 'hear-sequence-pick-word') {
     const correctWordId = params.targetWordId
     const correctW = correctWordId ? getWord(correctWordId) : undefined
     if (correctW) {
-      items.push({
-        label: correctW.word,
+      items.push(wordReview(correctW, {
         status: 'correct',
         heading: `✓ ${correctW.word} (${correctW.meaning})`,
         body: `The sounds spell: ${correctW.graphemes.join(' · ')} → "${correctW.word}".`,
-      })
+      }))
     }
 
     const selectedWordId = params.selectedUnitId
     if (selectedWordId && selectedWordId !== correctWordId) {
       const picked = getWord(selectedWordId)
       items.push({
+        wordId: picked?.id ?? selectedWordId,
         label: picked?.word ?? selectedWordId,
         status: 'your-answer',
         heading: `Your choice: ${picked?.word ?? selectedWordId}`,
@@ -266,6 +309,7 @@ export function buildAnswerReview(params: {
       if (opt.wordId === correctWordId || opt.wordId === selectedWordId) continue
       const w = getWord(opt.wordId)
       items.push({
+        wordId: opt.wordId,
         label: opt.label,
         status: 'wrong-option',
         heading: `${opt.label} — why not`,
@@ -274,7 +318,7 @@ export function buildAnswerReview(params: {
           : 'Different grapheme sequence.',
       })
     }
-    return items
+    return finalize(items, params.moduleId)
   }
 
   // Always explain the correct answer
@@ -338,7 +382,7 @@ export function buildAnswerReview(params: {
         }
       }
     }
-    return items
+    return finalize(items, params.moduleId)
   }
 
   if (params.format === 'hear-type-letter' && params.typedAnswer !== undefined) {
@@ -357,7 +401,7 @@ export function buildAnswerReview(params: {
           : `"${typed}" is not the right ${correct.category === 'digraph' ? 'digraph' : 'letter'}. The answer was ${correct.upper}.`,
       })
     }
-    return items
+    return finalize(items, params.moduleId)
   }
 
   // Multiple-choice formats
@@ -408,5 +452,5 @@ export function buildAnswerReview(params: {
     })
   }
 
-  return items
+  return finalize(items, params.moduleId)
 }
