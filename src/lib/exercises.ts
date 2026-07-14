@@ -1,11 +1,10 @@
 import {
-  getDistractorLabelsForUnit,
-  getDistractorUnits,
   getUnit,
   isDigraphModule,
   type PolishLetter,
 } from '../data/moduleRegistry'
 import type { ExerciseFormat } from '../data/modules'
+import { pickSimilarLabels, pickSimilarUnits } from '../lib/similarity'
 import { shuffle } from './scheduler'
 
 export interface Exercise {
@@ -23,6 +22,7 @@ export interface Exercise {
 export interface ExerciseOption {
   id: string
   label: string
+  unitId?: string
   letterId?: string
   audioLetterId?: string
 }
@@ -60,10 +60,14 @@ function unitLabel(letter: PolishLetter): string {
 }
 
 function generatePickEnglish(id: string, moduleId: string, letter: PolishLetter): Exercise {
-  const distractors = getDistractorLabelsForUnit(moduleId, letter, 3)
+  const distractors = pickSimilarLabels(moduleId, letter, 3)
   const options: ExerciseOption[] = shuffle([
-    { id: 'correct', label: letter.englishLabel },
-    ...distractors.map((d, i) => ({ id: `d${i}`, label: d })),
+    { id: 'correct', label: letter.englishLabel, unitId: letter.id },
+    ...distractors.map((d, i) => ({
+      id: `d${i}`,
+      label: d.label,
+      unitId: d.unitId,
+    })),
   ])
   const correctIndex = options.findIndex((o) => o.id === 'correct')
 
@@ -81,12 +85,13 @@ function generatePickEnglish(id: string, moduleId: string, letter: PolishLetter)
 }
 
 function generatePickAudio(id: string, moduleId: string, letter: PolishLetter): Exercise {
-  const distractors = getDistractorUnits(moduleId, letter, 3)
+  const distractors = pickSimilarUnits(moduleId, letter, 3)
   const options: ExerciseOption[] = shuffle([
-    { id: 'correct', label: letter.upper, audioLetterId: letter.id },
+    { id: 'correct', label: letter.upper, unitId: letter.id, audioLetterId: letter.id },
     ...distractors.map((d, i) => ({
       id: `d${i}`,
       label: d.upper,
+      unitId: d.id,
       audioLetterId: d.id,
     })),
   ])
@@ -118,12 +123,13 @@ function generateSpeakLetter(id: string, moduleId: string, letter: PolishLetter)
 }
 
 function generateHearPickLetter(id: string, moduleId: string, letter: PolishLetter): Exercise {
-  const distractors = getDistractorUnits(moduleId, letter, 3)
+  const distractors = pickSimilarUnits(moduleId, letter, 3)
   const options: ExerciseOption[] = shuffle([
-    { id: 'correct', label: letter.upper, letterId: letter.id },
+    { id: 'correct', label: letter.upper, unitId: letter.id, letterId: letter.id },
     ...distractors.map((d, i) => ({
       id: `d${i}`,
       label: d.upper,
+      unitId: d.id,
       letterId: d.id,
     })),
   ])
@@ -165,4 +171,24 @@ export function normalizeLetterInput(input: string): string {
 export function checkLetterInput(input: string, letter: PolishLetter): boolean {
   const n = normalizeLetterInput(input)
   return n === letter.lower || n === letter.upper.toLowerCase() || n === letter.id
+}
+
+/** Map exercise options to unit ids for review explanations */
+export function getOptionUnits(exercise: Exercise): { label: string; unitId: string }[] {
+  if (!exercise.options) return []
+  return exercise.options
+    .map((o) => ({
+      label: o.label,
+      unitId: o.unitId ?? o.letterId ?? o.audioLetterId ?? '',
+    }))
+    .filter((o) => o.unitId)
+}
+
+export function getSelectedUnitId(
+  exercise: Exercise,
+  selectedIndex: number | null,
+): string | undefined {
+  if (selectedIndex === null || !exercise.options) return undefined
+  const opt = exercise.options[selectedIndex]
+  return opt.unitId ?? opt.letterId ?? opt.audioLetterId
 }

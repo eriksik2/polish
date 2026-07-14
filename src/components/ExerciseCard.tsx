@@ -1,20 +1,27 @@
 import { getUnit } from '../data/moduleRegistry'
 import type { Exercise } from '../lib/exercises'
+import {
+  checkLetterInput,
+  getOptionUnits,
+  getSelectedUnitId,
+} from '../lib/exercises'
 import { playUnitAudio, stopUnitAudio } from '../lib/speech/audio'
 import { useSettings } from '../hooks/useSettings'
 import { useLessonDrawer } from '../context/LessonDrawerContext'
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import { listenOnce, scorePronunciation, isSTTSupported } from '../lib/speech/stt'
-import { checkLetterInput } from '../lib/exercises'
 import { haptic, type FeedbackResult } from '../lib/feedback'
 import { FeedbackOverlay } from './FeedbackOverlay'
+import { AnswerReview } from './AnswerReview'
+import { buildAnswerReview } from '../lib/explanations'
 
 interface ExerciseCardProps {
   exercise: Exercise
   onAnswer: (correct: boolean, responseTimeMs: number, meta?: Record<string, unknown>) => void
+  onContinue: () => void
 }
 
-export function ExerciseCard({ exercise, onAnswer }: ExerciseCardProps) {
+export function ExerciseCard({ exercise, onAnswer, onContinue }: ExerciseCardProps) {
   const { settings } = useSettings()
   const { openLesson } = useLessonDrawer()
   const [startTime] = useState(Date.now())
@@ -27,14 +34,34 @@ export function ExerciseCard({ exercise, onAnswer }: ExerciseCardProps) {
   const [feedbackResult, setFeedbackResult] = useState<FeedbackResult>(null)
   const [listening, setListening] = useState(false)
   const [played, setPlayed] = useState(false)
+  const [transcript, setTranscript] = useState<string>()
+  const [alternatives, setAlternatives] = useState<string[]>([])
+  const [answerCorrect, setAnswerCorrect] = useState<boolean | null>(null)
 
   const usesAudio =
     exercise.format === 'pick-audio' ||
     exercise.format === 'hear-pick-letter' ||
     exercise.format === 'hear-type-letter'
 
+  const selectedIndex = exercise.format === 'pick-audio' ? previewSelected : selected
+
   useEffect(() => {
     return () => stopUnitAudio()
+  }, [exercise.id])
+
+  useEffect(() => {
+    setSelected(null)
+    setPreviewSelected(null)
+    setPlayingIndex(null)
+    setTyped('')
+    setSubmitted(false)
+    setFeedback(null)
+    setFeedbackResult(null)
+    setListening(false)
+    setPlayed(false)
+    setTranscript(undefined)
+    setAlternatives([])
+    setAnswerCorrect(null)
   }, [exercise.id])
 
   useEffect(() => {
@@ -45,18 +72,21 @@ export function ExerciseCard({ exercise, onAnswer }: ExerciseCardProps) {
     }
   }, [exercise.id, settings?.autoPlayAudio])
 
-  const playLetter = useCallback((unitId: string, index?: number) => {
-    setPlayingIndex(index ?? null)
-    const ok = playUnitAudio(exercise.moduleId, unitId, {
-      onEnd: () => setPlayingIndex(null),
-      onError: () => {
-        setPlayingIndex(null)
-        setFeedback('Audio unavailable for this letter.')
-      },
-    })
-    if (!ok) setFeedback('Audio unavailable for this letter.')
-    return ok
-  }, [exercise.moduleId, exercise.letterId])
+  const playLetter = useCallback(
+    (unitId: string, index?: number) => {
+      setPlayingIndex(index ?? null)
+      const ok = playUnitAudio(exercise.moduleId, unitId, {
+        onEnd: () => setPlayingIndex(null),
+        onError: () => {
+          setPlayingIndex(null)
+          setFeedback('Audio unavailable.')
+        },
+      })
+      if (!ok) setFeedback('Audio unavailable.')
+      return ok
+    },
+    [exercise.moduleId],
+  )
 
   const playPromptAudio = () => {
     setPlayed(true)
@@ -71,8 +101,54 @@ export function ExerciseCard({ exercise, onAnswer }: ExerciseCardProps) {
     setTimeout(() => setFeedbackResult(null), correct ? 900 : 1100)
   }
 
-  const finish = (correct: boolean, message: string, meta?: Record<string, unknown>) => {
+  const reviewItems = useMemo(() => {
+    if (!submitted || answerCorrect === null) return []
+
+    const selectedUnitId =
+      exercise.format === 'hear-type-letter'
+        ? resolveTypedUnitId(exercise.moduleId, typed)
+        : getSelectedUnitId(exercise, selectedIndex)
+
+    const selectedLabel =
+      exercise.format === 'pick-english' && selectedIndex !== null
+        ? exercise.options?.[selectedIndex]?.label
+        : undefined
+
+    return buildAnswerReview({
+      moduleId: exercise.moduleId,
+      format: exercise.format,
+      correctUnitId: exercise.letterId,
+      selectedUnitId,
+      selectedLabel,
+      typedAnswer: typed,
+      transcript,
+      alternatives,
+      optionUnitIds: getOptionUnits(exercise),
+      answerCorrect,
+    })
+  }, [
+    submitted,
+    answerCorrect,
+    exercise,
+    selectedIndex,
+    typed,
+    transcript,
+    alternatives,
+  ])
+
+  function resolveTypedUnitId(moduleId: string, input: string): string | undefined {
+    const n = input.trim().toLowerCase()
+    if (!n) return undefined
+    return getUnit(moduleId, n)?.id
+  }
+
+  const finish = (
+    correct: boolean,
+    message: string,
+    meta?: Record<string, unknown>,
+  ) => {
     if (submitted) return
+    setAnswerCorrect(correct)
     setSubmitted(true)
     showFeedback(correct, message)
     onAnswer(correct, Date.now() - startTime, meta)
@@ -82,10 +158,15 @@ export function ExerciseCard({ exercise, onAnswer }: ExerciseCardProps) {
     if (submitted) return
     haptic('confirm')
     setSelected(index)
+    if (exercise.format === 'pick-audio') setPreviewSelected(index)
     const correct = index === exercise.correctIndex
     const msg = correct
       ? '✓ Correct!'
-      : `✗ Correct: ${exercise.format === 'pick-english' ? exercise.correctAnswer : getUnit(exercise.moduleId, exercise.correctAnswer)?.upper ?? exercise.correctAnswer}`
+      : `✗ Correct: ${
+          exercise.format === 'pick-english'
+            ? exercise.correctAnswer
+            : getUnit(exercise.moduleId, exercise.correctAnswer)?.upper ?? exercise.correctAnswer
+        }`
     finish(correct, msg)
   }
 
@@ -126,8 +207,19 @@ export function ExerciseCard({ exercise, onAnswer }: ExerciseCardProps) {
     setFeedback('Listening…')
     try {
       const result = await listenOnce()
-      const scored = scorePronunciation(exercise.moduleId, exercise.letterId, result.transcript, result.alternatives)
-      finish(scored.correct, scored.feedback, { confidence: scored.score, transcript: result.transcript })
+      setTranscript(result.transcript)
+      setAlternatives(result.alternatives)
+      const scored = scorePronunciation(
+        exercise.moduleId,
+        exercise.letterId,
+        result.transcript,
+        result.alternatives,
+      )
+      finish(scored.correct, scored.feedback, {
+        confidence: scored.score,
+        transcript: result.transcript,
+      })
+      setListening(false)
     } catch (err) {
       haptic('error')
       setFeedback(err instanceof Error ? err.message : 'Could not hear you. Try again.')
@@ -188,7 +280,7 @@ export function ExerciseCard({ exercise, onAnswer }: ExerciseCardProps) {
                   submitted
                     ? i === exercise.correctIndex
                       ? 'border-green-500 bg-green-500/20'
-                      : selected === i
+                      : selectedIndex === i
                         ? 'border-red-500 bg-red-500/20'
                         : 'border-slate-700 bg-slate-800/50'
                     : 'border-slate-700 bg-slate-800 hover:border-slate-500'
@@ -216,7 +308,7 @@ export function ExerciseCard({ exercise, onAnswer }: ExerciseCardProps) {
                     submitted
                       ? i === exercise.correctIndex
                         ? 'border-green-500 bg-green-500/20'
-                        : selected === i
+                        : selectedIndex === i
                           ? 'border-red-500 bg-red-500/20'
                           : 'border-slate-700 bg-slate-800/50'
                       : previewSelected === i
@@ -227,8 +319,12 @@ export function ExerciseCard({ exercise, onAnswer }: ExerciseCardProps) {
                   }`}
                 >
                   <span className="text-2xl">{playingIndex === i ? '🔉' : '🔊'}</span>
-                  <span className="text-sm text-slate-400">
-                    {previewSelected === i ? 'Selected' : `Option ${i + 1}`}
+                  <span className="text-sm text-slate-400 font-serif">
+                    {submitted
+                      ? getUnit(exercise.moduleId, opt.audioLetterId ?? '')?.upper
+                      : previewSelected === i
+                        ? 'Selected'
+                        : `Option ${i + 1}`}
                   </span>
                 </button>
               ))}
@@ -291,7 +387,19 @@ export function ExerciseCard({ exercise, onAnswer }: ExerciseCardProps) {
           <p className="text-center text-sm text-slate-400">{feedback}</p>
         )}
 
-        {usesAudio && (
+        {submitted && <AnswerReview items={reviewItems} />}
+
+        {submitted && (
+          <button
+            type="button"
+            onClick={onContinue}
+            className="w-full rounded-xl bg-slate-700 py-3.5 font-semibold text-slate-100 active:scale-[0.98] transition-transform"
+          >
+            Continue →
+          </button>
+        )}
+
+        {usesAudio && !submitted && (
           <p className="text-center text-[10px] text-slate-600">
             Native recordings · Wikimedia Commons (public domain)
           </p>

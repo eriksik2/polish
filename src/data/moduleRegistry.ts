@@ -8,12 +8,11 @@ import {
 } from './alphabet'
 import {
   getDigraph,
-  getDigraphDistractorLabels,
-  getDigraphDistractors,
   POLISH_DIGRAPHS,
   GENERAL_DIGRAPH_LESSON,
 } from './digraphs'
 import { MODULES, type ModuleInfo } from './modules'
+import { pickSimilarLabels, pickSimilarUnits } from '../lib/similarity'
 
 export type { PolishLetter }
 
@@ -59,8 +58,7 @@ export function getDistractorLabelsForUnit(
   correct: PolishLetter,
   count: number,
 ): string[] {
-  if (moduleId === 'digraphs') return getDigraphDistractorLabels(correct, count)
-  return getDistractorLabels(correct, count)
+  return pickSimilarLabels(moduleId, correct, count).map((d) => d.label)
 }
 
 export function getDistractorUnits(
@@ -68,8 +66,7 @@ export function getDistractorUnits(
   correct: PolishLetter,
   count: number,
 ): PolishLetter[] {
-  if (moduleId === 'digraphs') return getDigraphDistractors(correct, count)
-  return getDistractorLetters(correct, count)
+  return pickSimilarUnits(moduleId, correct, count)
 }
 
 export function getUnitDisplayLabel(moduleId: string, unitId: string): string {
@@ -79,3 +76,6 @@ export function getUnitDisplayLabel(moduleId: string, unitId: string): string {
 export function isDigraphModule(moduleId: string): boolean {
   return moduleId === 'digraphs'
 }
+
+// Legacy exports used by alphabet.ts distractor helpers
+export { getDistractorLabels, getDistractorLetters }
