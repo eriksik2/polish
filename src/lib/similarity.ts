@@ -95,6 +95,15 @@ export function pickSimilarUnits(
   correct: PolishLetter,
   count: number,
 ): PolishLetter[] {
+  return pickSimilarUnitsUnique(moduleId, correct, count, (u) => u.id)
+}
+
+function pickSimilarUnitsUnique(
+  moduleId: string,
+  correct: PolishLetter,
+  count: number,
+  uniqueKey: (unit: PolishLetter) => string,
+): PolishLetter[] {
   const all = unitsForModule(moduleId).filter((u) => u.id !== correct.id)
 
   const priorityIds = new Set<string>([
@@ -112,23 +121,27 @@ export function pickSimilarUnits(
     .sort((a, b) => b.score - a.score)
 
   const picked: PolishLetter[] = []
-  const used = new Set<string>()
+  const usedIds = new Set<string>()
+  const usedKeys = new Set<string>([uniqueKey(correct)])
 
   for (const { unit, score } of ranked) {
     if (picked.length >= count) break
     if (score < 10 && picked.length >= Math.min(2, count)) continue
-    if (!used.has(unit.id)) {
+    const key = uniqueKey(unit)
+    if (!usedIds.has(unit.id) && !usedKeys.has(key)) {
       picked.push(unit)
-      used.add(unit.id)
+      usedIds.add(unit.id)
+      usedKeys.add(key)
     }
   }
 
-  // Fill remaining with next-best if not enough similar ones
   for (const { unit } of ranked) {
     if (picked.length >= count) break
-    if (!used.has(unit.id)) {
+    const key = uniqueKey(unit)
+    if (!usedIds.has(unit.id) && !usedKeys.has(key)) {
       picked.push(unit)
-      used.add(unit.id)
+      usedIds.add(unit.id)
+      usedKeys.add(key)
     }
   }
 
@@ -140,7 +153,7 @@ export function pickSimilarLabels(
   correct: PolishLetter,
   count: number,
 ): { label: string; unitId: string }[] {
-  return pickSimilarUnits(moduleId, correct, count).map((u) => ({
+  return pickSimilarUnitsUnique(moduleId, correct, count, (u) => u.englishLabel).map((u) => ({
     label: u.englishLabel,
     unitId: u.id,
   }))

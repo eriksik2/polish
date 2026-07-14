@@ -38,7 +38,7 @@ export interface AppSettings {
 }
 
 const DEFAULT_ENABLED: Record<ExerciseFormat, boolean> = Object.fromEntries(
-  EXERCISE_FORMATS.map((f) => [f.id, true]),
+  EXERCISE_FORMATS.map((f) => [f.id, f.id !== 'word-pick-unit']),
 ) as Record<ExerciseFormat, boolean>
 
 const DEFAULT_SETTINGS: AppSettings = {
@@ -68,11 +68,19 @@ export const db = new PolishLearnDB()
 export async function getSettings(): Promise<AppSettings> {
   const existing = await db.settings.get('settings')
   if (existing) {
+    let changed = false
     for (const f of EXERCISE_FORMATS) {
       if (existing.enabledFormats[f.id] === undefined) {
-        existing.enabledFormats[f.id] = true
+        existing.enabledFormats[f.id] = f.id !== 'word-pick-unit'
+        changed = true
       }
     }
+    // Word→letter is trivial when the grapheme is already highlighted
+    if (existing.enabledFormats['word-pick-unit']) {
+      existing.enabledFormats['word-pick-unit'] = false
+      changed = true
+    }
+    if (changed) await db.settings.put(existing)
     return existing
   }
   await db.settings.put(DEFAULT_SETTINGS)

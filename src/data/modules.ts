@@ -60,7 +60,7 @@ export const EXERCISE_FORMATS: {
     id: 'word-pick-unit',
     label: 'Word → pick letter',
     shortLabel: 'H',
-    description: 'See a highlighted word → pick the matching letter or digraph',
+    description: 'See a highlighted word → pick the matching letter (disabled by default — letter is already shown)',
   },
 ]
 
