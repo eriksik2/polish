@@ -454,7 +454,7 @@ export function ExerciseCard({ exercise, onAnswer, onContinue }: ExerciseCardPro
                     ? 'Play sounds'
                     : 'Play word'}
             </button>
-            {exercise.format === 'hear-word-pick-letter' && targetWord && (
+            {exercise.format === 'hear-word-pick-letter' && targetWord && submitted && (
               <p className="text-xs text-slate-500">{targetWord.meaning}</p>
             )}
           </div>

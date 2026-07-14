@@ -316,7 +316,7 @@ function generateHearWordPickLetter(id: string, moduleId: string, letter: Polish
     correctIndex,
     targetWordId: word.id,
     highlightIndex: link.index,
-    prompt: `Listen to the word — which letter or digraph is “${letter.upper}”?`,
+    prompt: 'Listen to the word — which letter or digraph do you hear in it?',
   }
 }
 
