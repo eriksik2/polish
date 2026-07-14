@@ -59,4 +59,11 @@ export const MODULES: ModuleInfo[] = [
     icon: 'ą',
     available: true,
   },
+  {
+    id: 'digraphs',
+    title: 'Digraphs',
+    description: 'Master ch, cz, dz, dź, dż, rz, sz — two-letter sound pairs',
+    icon: 'sz',
+    available: true,
+  },
 ]

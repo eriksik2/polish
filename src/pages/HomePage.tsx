@@ -7,8 +7,17 @@ export function HomePage() {
   const [todayStats, setTodayStats] = useState({ attempts: 0, accuracy: 0 })
 
   useEffect(() => {
-    getStatsSummary({ timeframe: 'today', moduleId: 'alphabet' }).then((s) => {
-      setTodayStats({ attempts: s.attempts, accuracy: s.accuracy })
+    Promise.all(
+      MODULES.filter((m) => m.available).map((m) =>
+        getStatsSummary({ timeframe: 'today', moduleId: m.id }),
+      ),
+    ).then((summaries) => {
+      const attempts = summaries.reduce((s, x) => s + x.attempts, 0)
+      const correct = summaries.reduce((s, x) => s + x.correct, 0)
+      setTodayStats({
+        attempts,
+        accuracy: attempts ? Math.round((correct / attempts) * 100) : 0,
+      })
     })
   }, [])
 
@@ -32,23 +41,41 @@ export function HomePage() {
         <h2 className="text-sm font-medium text-slate-400 mb-3">Modules</h2>
         <div className="space-y-3">
           {MODULES.map((mod) => (
-            <Link
+            <div
               key={mod.id}
-              to={mod.available ? `/practice?module=${mod.id}` : '#'}
-              className={`block rounded-2xl border p-4 transition-colors ${
+              className={`rounded-2xl border p-4 transition-colors ${
                 mod.available
-                  ? 'border-slate-700 bg-slate-800/60 hover:border-red-500/50'
-                  : 'border-slate-800 bg-slate-900 opacity-50 pointer-events-none'
+                  ? 'border-slate-700 bg-slate-800/60'
+                  : 'border-slate-800 bg-slate-900 opacity-50'
               }`}
             >
-              <div className="flex items-center gap-3">
+              <Link
+                to={mod.available ? `/practice?module=${mod.id}` : '#'}
+                className={`flex items-center gap-3 ${mod.available ? 'hover:opacity-90' : 'pointer-events-none'}`}
+              >
                 <span className="text-3xl font-serif text-red-400">{mod.icon}</span>
-                <div>
+                <div className="flex-1">
                   <h3 className="font-semibold">{mod.title}</h3>
                   <p className="text-sm text-slate-400">{mod.description}</p>
                 </div>
-              </div>
-            </Link>
+              </Link>
+              {mod.available && (
+                <div className="mt-3 flex gap-2 text-xs">
+                  <Link
+                    to={`/practice?module=${mod.id}`}
+                    className="rounded-lg bg-red-600/20 px-2 py-1 text-red-400"
+                  >
+                    Practice
+                  </Link>
+                  <Link
+                    to={`/lessons?module=${mod.id}`}
+                    className="rounded-lg bg-slate-900 px-2 py-1 text-slate-400"
+                  >
+                    Lessons
+                  </Link>
+                </div>
+              )}
+            </div>
           ))}
         </div>
       </section>

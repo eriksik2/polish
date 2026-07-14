@@ -1,4 +1,4 @@
-import { LETTER_MAP, POLISH_ALPHABET, GENERAL_ALPHABET_LESSON } from '../data/alphabet'
+import { getModuleUnits, getUnit, getGeneralLesson } from '../data/moduleRegistry'
 import { useLessonDrawer } from '../context/LessonDrawerContext'
 import { useSettings } from '../hooks/useSettings'
 
@@ -8,9 +8,10 @@ export function LessonDrawer() {
 
   if (!state.open) return null
 
+  const generalLesson = state.showGeneral ? getGeneralLesson(state.moduleId) : null
   const letters = state.showGeneral
     ? []
-    : state.letterIds.map((id) => LETTER_MAP.get(id)).filter(Boolean)
+    : state.letterIds.map((id) => getUnit(state.moduleId, id)).filter(Boolean)
 
   return (
     <div className="fixed inset-0 z-50 flex flex-col justify-end">
@@ -32,10 +33,10 @@ export function LessonDrawer() {
           </button>
         </div>
 
-        {state.showGeneral && (
+        {generalLesson && (
           <div className="space-y-4">
-            <h3 className="text-xl font-bold text-red-400">{GENERAL_ALPHABET_LESSON.title}</h3>
-            {GENERAL_ALPHABET_LESSON.sections.map((s) => (
+            <h3 className="text-xl font-bold text-red-400">{generalLesson.title}</h3>
+            {generalLesson.sections.map((s) => (
               <div key={s.heading}>
                 <h4 className="font-semibold text-slate-200">{s.heading}</h4>
                 <p className="mt-1 text-sm text-slate-400 leading-relaxed">{s.body}</p>
@@ -92,7 +93,10 @@ export function LessonDrawer() {
 
             {letter.confusedWith && (
               <p className="text-xs text-slate-500">
-                Often confused with: {letter.confusedWith.map((id) => LETTER_MAP.get(id)?.upper).join(', ')}
+                Often confused with:{' '}
+                {letter.confusedWith
+                  .map((id) => getUnit(state.moduleId, id)?.upper ?? id)
+                  .join(', ')}
               </p>
             )}
           </div>
@@ -102,17 +106,24 @@ export function LessonDrawer() {
   )
 }
 
-export function LetterGrid({ onSelect }: { onSelect: (id: string) => void }) {
+export function UnitGrid({
+  moduleId,
+  onSelect,
+}: {
+  moduleId: string
+  onSelect: (id: string) => void
+}) {
+  const units = getModuleUnits(moduleId)
   return (
     <div className="grid grid-cols-4 gap-2 sm:grid-cols-6">
-      {POLISH_ALPHABET.map((l) => (
+      {units.map((u) => (
         <button
-          key={l.id}
+          key={u.id}
           type="button"
-          onClick={() => onSelect(l.id)}
-          className="aspect-square rounded-xl bg-slate-800/80 text-2xl font-serif hover:bg-slate-700 active:scale-95 transition-transform"
+          onClick={() => onSelect(u.id)}
+          className="aspect-square rounded-xl bg-slate-800/80 text-xl font-serif hover:bg-slate-700 active:scale-95 transition-transform px-1"
         >
-          {l.upper}
+          {u.upper}
         </button>
       ))}
     </div>

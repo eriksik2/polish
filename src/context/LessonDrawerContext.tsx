@@ -1,17 +1,16 @@
 import { createContext, useContext, useState, type ReactNode } from 'react'
-import type { PolishLetter } from '../data/alphabet'
-import { GENERAL_ALPHABET_LESSON } from '../data/alphabet'
 
 interface LessonDrawerState {
   open: boolean
+  moduleId: string
   letterIds: string[]
   showGeneral: boolean
 }
 
 interface LessonDrawerContextValue {
   state: LessonDrawerState
-  openLesson: (letterIds: string[], showGeneral?: boolean) => void
-  openGeneralLesson: () => void
+  openLesson: (moduleId: string, letterIds: string[], showGeneral?: boolean) => void
+  openGeneralLesson: (moduleId: string) => void
   closeLesson: () => void
 }
 
@@ -20,20 +19,21 @@ const LessonDrawerContext = createContext<LessonDrawerContextValue | null>(null)
 export function LessonDrawerProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<LessonDrawerState>({
     open: false,
+    moduleId: 'alphabet',
     letterIds: [],
     showGeneral: false,
   })
 
-  const openLesson = (letterIds: string[], showGeneral = false) => {
-    setState({ open: true, letterIds, showGeneral })
+  const openLesson = (moduleId: string, letterIds: string[], showGeneral = false) => {
+    setState({ open: true, moduleId, letterIds, showGeneral })
   }
 
-  const openGeneralLesson = () => {
-    setState({ open: true, letterIds: [], showGeneral: true })
+  const openGeneralLesson = (moduleId: string) => {
+    setState({ open: true, moduleId, letterIds: [], showGeneral: true })
   }
 
   const closeLesson = () => {
-    setState({ open: false, letterIds: [], showGeneral: false })
+    setState({ open: false, moduleId: 'alphabet', letterIds: [], showGeneral: false })
   }
 
   return (
@@ -48,6 +48,3 @@ export function useLessonDrawer() {
   if (!ctx) throw new Error('useLessonDrawer must be used within LessonDrawerProvider')
   return ctx
 }
-
-export { GENERAL_ALPHABET_LESSON }
-export type { PolishLetter }

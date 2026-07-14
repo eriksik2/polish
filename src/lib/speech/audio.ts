@@ -1,24 +1,33 @@
-import manifest from '../../data/letter-audio-manifest.json'
+import letterManifest from '../../data/letter-audio-manifest.json'
+import digraphManifest from '../../data/digraph-audio-manifest.json'
 
 const BASE = import.meta.env.BASE_URL
 
+const MANIFESTS: Record<string, Record<string, string>> = {
+  alphabet: letterManifest,
+  digraphs: digraphManifest,
+}
+
 let currentAudio: HTMLAudioElement | null = null
 
-export function hasLetterRecording(letterId: string): boolean {
-  return letterId in manifest
+export function hasUnitRecording(moduleId: string, unitId: string): boolean {
+  return Boolean(MANIFESTS[moduleId]?.[unitId])
 }
 
-export function isLetterAudioAvailable(): boolean {
-  return Object.keys(manifest).length >= 32
+export function isModuleAudioAvailable(moduleId: string): boolean {
+  const manifest = MANIFESTS[moduleId]
+  if (!manifest) return false
+  const expected = moduleId === 'alphabet' ? 32 : moduleId === 'digraphs' ? 7 : 0
+  return Object.keys(manifest).length >= expected
 }
 
-function audioUrl(letterId: string): string | null {
-  const rel = manifest[letterId as keyof typeof manifest]
+function audioUrl(moduleId: string, unitId: string): string | null {
+  const rel = MANIFESTS[moduleId]?.[unitId]
   if (!rel) return null
   return `${BASE}${rel}`
 }
 
-export function stopLetterAudio(): void {
+export function stopUnitAudio(): void {
   if (currentAudio) {
     currentAudio.pause()
     currentAudio.currentTime = 0
@@ -26,18 +35,21 @@ export function stopLetterAudio(): void {
   }
 }
 
-/** Play native Polish letter pronunciation from bundled recordings (Wikimedia Commons, public domain). */
-export function playLetterAudio(
-  letterId: string,
+/** @deprecated use stopUnitAudio */
+export const stopLetterAudio = stopUnitAudio
+
+export function playUnitAudio(
+  moduleId: string,
+  unitId: string,
   options?: { onEnd?: () => void; onError?: () => void },
 ): boolean {
-  const url = audioUrl(letterId)
+  const url = audioUrl(moduleId, unitId)
   if (!url) {
     options?.onError?.()
     return false
   }
 
-  stopLetterAudio()
+  stopUnitAudio()
   const audio = new Audio(url)
   currentAudio = audio
   audio.onended = () => {
@@ -52,9 +64,34 @@ export function playLetterAudio(
   return true
 }
 
+/** @deprecated use playUnitAudio */
+export function playLetterAudio(
+  letterId: string,
+  options?: { onEnd?: () => void; onError?: () => void },
+): boolean {
+  return playUnitAudio('alphabet', letterId, options)
+}
+
+/** @deprecated */
+export function hasLetterRecording(letterId: string): boolean {
+  return hasUnitRecording('alphabet', letterId)
+}
+
+/** @deprecated */
+export function isLetterAudioAvailable(): boolean {
+  return isModuleAudioAvailable('alphabet')
+}
+
 export const LETTER_AUDIO_ATTRIBUTION = {
   title: 'Polish Alphabet.oga',
   author: 'Wyksztalcioch',
   license: 'Public domain',
   url: 'https://commons.wikimedia.org/wiki/File:Polish_Alphabet.oga',
+}
+
+export const DIGRAPH_AUDIO_ATTRIBUTION = {
+  title: 'Wikimedia Commons pronunciation clips',
+  author: 'Various native speakers',
+  license: 'See individual files on Wikimedia Commons',
+  url: 'https://commons.wikimedia.org/wiki/Category:Polish_pronunciation',
 }

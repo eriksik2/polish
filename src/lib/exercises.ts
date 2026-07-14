@@ -1,9 +1,10 @@
 import {
-  getDistractorLabels,
-  getDistractorLetters,
-  getLetter,
+  getDistractorLabelsForUnit,
+  getDistractorUnits,
+  getUnit,
+  isDigraphModule,
   type PolishLetter,
-} from '../data/alphabet'
+} from '../data/moduleRegistry'
 import type { ExerciseFormat } from '../data/modules'
 import { shuffle } from './scheduler'
 
@@ -33,7 +34,7 @@ export function generateExercise(
   letterId: string,
   format: ExerciseFormat,
 ): Exercise | null {
-  const letter = getLetter(letterId)
+  const letter = getUnit(moduleId, letterId)
   if (!letter) return null
 
   const id = `ex-${++exerciseCounter}-${Date.now()}`
@@ -54,8 +55,12 @@ export function generateExercise(
   }
 }
 
+function unitLabel(letter: PolishLetter): string {
+  return letter.upper
+}
+
 function generatePickEnglish(id: string, moduleId: string, letter: PolishLetter): Exercise {
-  const distractors = getDistractorLabels(letter, 3)
+  const distractors = getDistractorLabelsForUnit(moduleId, letter, 3)
   const options: ExerciseOption[] = shuffle([
     { id: 'correct', label: letter.englishLabel },
     ...distractors.map((d, i) => ({ id: `d${i}`, label: d })),
@@ -71,12 +76,12 @@ function generatePickEnglish(id: string, moduleId: string, letter: PolishLetter)
     options,
     correctAnswer: letter.englishLabel,
     correctIndex,
-    prompt: `What sound does "${letter.upper}" make?`,
+    prompt: `What sound does "${unitLabel(letter)}" make?`,
   }
 }
 
 function generatePickAudio(id: string, moduleId: string, letter: PolishLetter): Exercise {
-  const distractors = getDistractorLetters(letter, 3)
+  const distractors = getDistractorUnits(moduleId, letter, 3)
   const options: ExerciseOption[] = shuffle([
     { id: 'correct', label: letter.upper, audioLetterId: letter.id },
     ...distractors.map((d, i) => ({
@@ -96,7 +101,7 @@ function generatePickAudio(id: string, moduleId: string, letter: PolishLetter): 
     options,
     correctAnswer: letter.id,
     correctIndex,
-    prompt: `Which audio matches the letter "${letter.upper}"?`,
+    prompt: `Which audio matches "${unitLabel(letter)}"?`,
   }
 }
 
@@ -108,12 +113,12 @@ function generateSpeakLetter(id: string, moduleId: string, letter: PolishLetter)
     format: 'speak-letter',
     letter,
     correctAnswer: letter.id,
-    prompt: `Pronounce the letter "${letter.upper}" (${letter.englishApprox})`,
+    prompt: `Pronounce "${unitLabel(letter)}" (${letter.englishApprox})`,
   }
 }
 
 function generateHearPickLetter(id: string, moduleId: string, letter: PolishLetter): Exercise {
-  const distractors = getDistractorLetters(letter, 3)
+  const distractors = getDistractorUnits(moduleId, letter, 3)
   const options: ExerciseOption[] = shuffle([
     { id: 'correct', label: letter.upper, letterId: letter.id },
     ...distractors.map((d, i) => ({
@@ -133,7 +138,9 @@ function generateHearPickLetter(id: string, moduleId: string, letter: PolishLett
     options,
     correctAnswer: letter.id,
     correctIndex,
-    prompt: 'Listen and pick the correct letter',
+    prompt: isDigraphModule(moduleId)
+      ? 'Listen and pick the correct digraph'
+      : 'Listen and pick the correct letter',
   }
 }
 
@@ -145,7 +152,9 @@ function generateHearTypeLetter(id: string, moduleId: string, letter: PolishLett
     format: 'hear-type-letter',
     letter,
     correctAnswer: letter.lower,
-    prompt: 'Listen to the letter name and type the letter',
+    prompt: isDigraphModule(moduleId)
+      ? 'Listen and type the digraph'
+      : 'Listen and type the letter',
   }
 }
 

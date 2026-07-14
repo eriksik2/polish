@@ -22,14 +22,19 @@ Exercises mix letters and formats rather than blocking one letter at a time. Res
 
 All exercise formats require **active recall** — no passive re-reading. Lessons are available on demand but never substitute for retrieval.
 
-### 4. Desirable difficulty
+### 4. Adaptive difficulty (performance-based)
 
-The scheduler weights:
+After **3+ attempts** on a letter×format:
 
-- Lower accuracy items → more frequent
-- Longer response time → more frequent
-- Recently failed formats → boosted priority
-- Mastered items → longer intervals
+| Recent performance | Queue behavior |
+|--------------------|----------------|
+| ≥90% accuracy + 3-streak | Priority ~4 — rarely shown (~12% of picks) |
+| ≥80% accuracy + 2-streak | Priority ~12 — occasional review |
+| 70–80% | Normal weight |
+| <70% | Boosted priority |
+| <55% | Strong boost (+45 priority) |
+
+The queue picks **~88% from weak items** (priority ≥ 20) and **~12% from strong items** for maintenance.
 
 ### 5. Feedback timing
 

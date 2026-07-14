@@ -1,4 +1,4 @@
-export type LetterCategory = 'vowel' | 'consonant'
+export type LetterCategory = 'vowel' | 'consonant' | 'digraph'
 
 export interface LetterExample {
   word: string

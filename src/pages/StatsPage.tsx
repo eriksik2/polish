@@ -7,8 +7,8 @@ import {
   type DimensionStats,
   type StatsSummary,
 } from '../lib/tracking'
-import { EXERCISE_FORMATS } from '../data/modules'
-import { POLISH_ALPHABET } from '../data/alphabet'
+import { EXERCISE_FORMATS, MODULES } from '../data/modules'
+import { getModuleUnits } from '../data/moduleRegistry'
 
 const TIMEFRAMES: { id: Timeframe; label: string }[] = [
   { id: 'today', label: 'Today' },
@@ -38,13 +38,13 @@ function StatBar({ summary }: { summary: StatsSummary }) {
 }
 
 export function StatsPage() {
+  const [moduleId, setModuleId] = useState('alphabet')
   const [timeframe, setTimeframe] = useState<Timeframe>('7d')
   const [overall, setOverall] = useState<StatsSummary | null>(null)
   const [byLetter, setByLetter] = useState<DimensionStats[]>([])
   const [byFormat, setByFormat] = useState<DimensionStats[]>([])
 
   useEffect(() => {
-    const moduleId = 'alphabet'
     Promise.all([
       getStatsSummary({ timeframe, moduleId }),
       getStatsByLetter(moduleId, timeframe),
@@ -54,17 +54,33 @@ export function StatsPage() {
       setByLetter(letters)
       setByFormat(formats)
     })
-  }, [timeframe])
+  }, [timeframe, moduleId])
 
-  const letterMap = new Map(byLetter.map((l) => [l.key, l.summary]))
+  const units = getModuleUnits(moduleId)
+  const unitMap = new Map(byLetter.map((l) => [l.key, l.summary]))
   const formatMap = new Map(byFormat.map((f) => [f.key, f.summary]))
 
   return (
     <div className="p-4 space-y-6">
       <header>
         <h1 className="text-xl font-bold">Statistics</h1>
-        <p className="text-sm text-slate-400">Track your progress across letters and formats</p>
+        <p className="text-sm text-slate-400">Track your progress by module, item, and format</p>
       </header>
+
+      <div className="flex gap-2 overflow-x-auto pb-1">
+        {MODULES.filter((m) => m.available).map((m) => (
+          <button
+            key={m.id}
+            type="button"
+            onClick={() => setModuleId(m.id)}
+            className={`shrink-0 rounded-full px-4 py-1.5 text-sm ${
+              moduleId === m.id ? 'bg-red-600 text-white' : 'bg-slate-800 text-slate-400'
+            }`}
+          >
+            {m.title}
+          </button>
+        ))}
+      </div>
 
       <div className="flex gap-2 overflow-x-auto pb-1">
         {TIMEFRAMES.map((tf) => (
@@ -124,10 +140,10 @@ export function StatsPage() {
       </section>
 
       <section>
-        <h2 className="text-sm font-medium text-slate-400 mb-3">By letter</h2>
+        <h2 className="text-sm font-medium text-slate-400 mb-3">By item</h2>
         <div className="space-y-2 max-h-80 overflow-y-auto">
-          {POLISH_ALPHABET.map((l) => {
-            const s = letterMap.get(l.id) ?? {
+          {units.map((l) => {
+            const s = unitMap.get(l.id) ?? {
               attempts: 0, correct: 0, accuracy: 0, avgResponseTimeMs: 0, currentStreak: 0, bestStreak: 0,
             }
             return (

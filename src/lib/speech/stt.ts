@@ -1,4 +1,4 @@
-import { getLetter } from '../../data/alphabet'
+import { getUnit } from '../../data/moduleRegistry'
 
 const POLISH_LOCALE = 'pl-PL'
 
@@ -72,11 +72,12 @@ function normalize(text: string): string {
 
 /** Score how well spoken input matches expected letter */
 export function scorePronunciation(
-  letterId: string,
+  moduleId: string,
+  unitId: string,
   transcript: string,
   alternatives: string[] = [],
 ): { correct: boolean; score: number; feedback: string } {
-  const letter = getLetter(letterId)
+  const letter = getUnit(moduleId, unitId)
   if (!letter) return { correct: false, score: 0, feedback: 'Unknown letter' }
 
   const allTexts = [transcript, ...alternatives].map(normalize)

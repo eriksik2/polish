@@ -19,6 +19,14 @@ a ą b c ć d e ę f g h i j k l ł m n ń o ó p r s ś t u w y z ź ż
 
 Exclude q, v, x (loanwords only).
 
+## Digraph module (7 digraphs)
+
+```
+ch cz dz dź dż rz sz
+```
+
+See `docs/polish-digraphs.md` and `src/data/digraphs.ts`.
+
 ## Non-negotiable facts
 
 | Letter | Sound | Common mistake |

@@ -1,6 +1,6 @@
-import { getLetter } from '../data/alphabet'
+import { getUnit } from '../data/moduleRegistry'
 import type { Exercise } from '../lib/exercises'
-import { playLetterAudio, stopLetterAudio } from '../lib/speech/audio'
+import { playUnitAudio, stopUnitAudio } from '../lib/speech/audio'
 import { useSettings } from '../hooks/useSettings'
 import { useLessonDrawer } from '../context/LessonDrawerContext'
 import { useState, useEffect, useCallback } from 'react'
@@ -34,7 +34,7 @@ export function ExerciseCard({ exercise, onAnswer }: ExerciseCardProps) {
     exercise.format === 'hear-type-letter'
 
   useEffect(() => {
-    return () => stopLetterAudio()
+    return () => stopUnitAudio()
   }, [exercise.id])
 
   useEffect(() => {
@@ -45,9 +45,9 @@ export function ExerciseCard({ exercise, onAnswer }: ExerciseCardProps) {
     }
   }, [exercise.id, settings?.autoPlayAudio])
 
-  const playLetter = useCallback((letterId: string, index?: number) => {
+  const playLetter = useCallback((unitId: string, index?: number) => {
     setPlayingIndex(index ?? null)
-    const ok = playLetterAudio(letterId, {
+    const ok = playUnitAudio(exercise.moduleId, unitId, {
       onEnd: () => setPlayingIndex(null),
       onError: () => {
         setPlayingIndex(null)
@@ -56,7 +56,7 @@ export function ExerciseCard({ exercise, onAnswer }: ExerciseCardProps) {
     })
     if (!ok) setFeedback('Audio unavailable for this letter.')
     return ok
-  }, [])
+  }, [exercise.moduleId, exercise.letterId])
 
   const playPromptAudio = () => {
     setPlayed(true)
@@ -85,7 +85,7 @@ export function ExerciseCard({ exercise, onAnswer }: ExerciseCardProps) {
     const correct = index === exercise.correctIndex
     const msg = correct
       ? '✓ Correct!'
-      : `✗ Correct: ${exercise.format === 'pick-english' ? exercise.correctAnswer : getLetter(exercise.correctAnswer)?.upper ?? exercise.correctAnswer}`
+      : `✗ Correct: ${exercise.format === 'pick-english' ? exercise.correctAnswer : getUnit(exercise.moduleId, exercise.correctAnswer)?.upper ?? exercise.correctAnswer}`
     finish(correct, msg)
   }
 
@@ -126,7 +126,7 @@ export function ExerciseCard({ exercise, onAnswer }: ExerciseCardProps) {
     setFeedback('Listening…')
     try {
       const result = await listenOnce()
-      const scored = scorePronunciation(exercise.letterId, result.transcript, result.alternatives)
+      const scored = scorePronunciation(exercise.moduleId, exercise.letterId, result.transcript, result.alternatives)
       finish(scored.correct, scored.feedback, { confidence: scored.score, transcript: result.transcript })
     } catch (err) {
       haptic('error')
@@ -149,7 +149,7 @@ export function ExerciseCard({ exercise, onAnswer }: ExerciseCardProps) {
           <p className="text-sm text-slate-400">{exercise.prompt}</p>
           <button
             type="button"
-            onClick={() => openLesson([exercise.letterId])}
+            onClick={() => openLesson(exercise.moduleId, [exercise.letterId])}
             className="shrink-0 rounded-lg bg-slate-800 px-2.5 py-1 text-xs text-red-400"
           >
             📖 Lesson
@@ -273,7 +273,7 @@ export function ExerciseCard({ exercise, onAnswer }: ExerciseCardProps) {
               disabled={submitted}
               placeholder="Type the letter…"
               className="w-full rounded-xl border border-slate-700 bg-slate-800 px-4 py-3.5 text-center text-3xl font-serif focus:border-red-500 focus:outline-none"
-              maxLength={2}
+              maxLength={exercise.letter.category === 'digraph' ? 3 : 2}
               onKeyDown={(e) => e.key === 'Enter' && handleTypeSubmit()}
             />
             <button

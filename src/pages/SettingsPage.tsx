@@ -2,15 +2,20 @@ import { useEffect, useState } from 'react'
 import { EXERCISE_FORMATS } from '../data/modules'
 import { useSettings } from '../hooks/useSettings'
 import { isSTTSupported } from '../lib/speech/stt'
-import { isLetterAudioAvailable, LETTER_AUDIO_ATTRIBUTION } from '../lib/speech/audio'
+import { isModuleAudioAvailable, LETTER_AUDIO_ATTRIBUTION, DIGRAPH_AUDIO_ATTRIBUTION } from '../lib/speech/audio'
+import { MODULES } from '../data/modules'
 import type { ExerciseFormat } from '../lib/db'
 
 export function SettingsPage() {
   const { settings, loading, update } = useSettings()
-  const [audioReady, setAudioReady] = useState(false)
+  const [audioStatus, setAudioStatus] = useState<Record<string, boolean>>({})
 
   useEffect(() => {
-    setAudioReady(isLetterAudioAvailable())
+    const status: Record<string, boolean> = {}
+    for (const m of MODULES) {
+      if (m.available) status[m.id] = isModuleAudioAvailable(m.id)
+    }
+    setAudioStatus(status)
   }, [])
 
   if (loading || !settings) {
@@ -80,14 +85,17 @@ export function SettingsPage() {
           </label>
 
           <div className="rounded-xl bg-slate-800/60 px-4 py-3 text-sm space-y-2">
-            <p className="text-slate-400">Letter pronunciation</p>
-            <p>
-              {audioReady
-                ? '✓ Native recordings loaded (32 letters)'
-                : '✗ Recordings unavailable — audio exercises disabled'}
+            <p className="text-slate-400">Pronunciation audio</p>
+            {MODULES.filter((m) => m.available).map((m) => (
+              <p key={m.id}>
+                {m.title}: {audioStatus[m.id] ? '✓ Recordings loaded' : '✗ Unavailable'}
+              </p>
+            ))}
+            <p className="text-xs text-slate-500">
+              Alphabet: {LETTER_AUDIO_ATTRIBUTION.title} ({LETTER_AUDIO_ATTRIBUTION.license})
             </p>
             <p className="text-xs text-slate-500">
-              Source: {LETTER_AUDIO_ATTRIBUTION.title} by {LETTER_AUDIO_ATTRIBUTION.author} ({LETTER_AUDIO_ATTRIBUTION.license})
+              Digraphs: {DIGRAPH_AUDIO_ATTRIBUTION.title}
             </p>
           </div>
 

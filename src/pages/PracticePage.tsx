@@ -8,12 +8,14 @@ import type { Exercise } from '../lib/exercises'
 import { buildExerciseQueue, qualityFromAttempt } from '../lib/scheduler'
 import { recordAttempt, updateMemoryAfterAttempt } from '../lib/tracking'
 import { EXERCISE_FORMATS } from '../data/modules'
+import { getModuleInfo } from '../data/moduleRegistry'
 
 export function PracticePage() {
   const [params] = useSearchParams()
   const moduleId = params.get('module') ?? 'alphabet'
   const { settings, loading } = useSettings()
   const { openGeneralLesson } = useLessonDrawer()
+  const moduleInfo = getModuleInfo(moduleId)
 
   const [exercise, setExercise] = useState<Exercise | null>(null)
   const [queue, setQueue] = useState<{ letterId: string; format: string }[]>([])
@@ -52,13 +54,17 @@ export function PracticePage() {
 
   useEffect(() => {
     if (loading || !settings) return
+    setReady(false)
+    setExercise(null)
+    setQueue([])
+    setSessionStats({ done: 0, correct: 0 })
     loadQueue().then((items) => {
       if (items && items.length > 0) {
         nextExercise(items)
       }
       setReady(true)
     })
-  }, [loading, settings])
+  }, [loading, settings, moduleId])
 
   const handleAnswer = async (
     correct: boolean,
@@ -119,7 +125,7 @@ export function PracticePage() {
       <header className="flex items-center justify-between">
         <div>
           <h1 className="text-xl font-bold">Practice</h1>
-          <p className="text-xs text-slate-500">Alphabet module</p>
+          <p className="text-xs text-slate-500">{moduleInfo?.title ?? moduleId} module</p>
         </div>
         <div className="text-right text-sm">
           <p className="text-slate-400">
@@ -134,7 +140,7 @@ export function PracticePage() {
       <div className="flex gap-2">
         <button
           type="button"
-          onClick={openGeneralLesson}
+          onClick={() => openGeneralLesson(moduleId)}
           className="rounded-lg bg-slate-800 px-3 py-1.5 text-xs text-slate-300"
         >
           📖 General lesson
