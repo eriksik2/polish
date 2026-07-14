@@ -32,7 +32,7 @@ export function LessonsPage() {
   return (
     <div className="p-4 space-y-6">
       <header>
-        <h1 className="text-xl font-bold">Knowledge</h1>
+        <h1 className="text-xl font-bold">Knowledge base</h1>
         <p className="text-sm text-slate-400">
           {moduleInfo?.title ?? moduleId} — letters, digraphs & vocabulary
         </p>

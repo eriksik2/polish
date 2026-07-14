@@ -26,9 +26,19 @@ interface ExerciseCardProps {
   exercise: Exercise
   onAnswer: (correct: boolean, responseTimeMs: number, meta?: Record<string, unknown>) => void
   onContinue: () => void
+  noHelp?: boolean
+  quickMode?: boolean
+  itemTimeLimitSec?: number | null
 }
 
-export function ExerciseCard({ exercise, onAnswer, onContinue }: ExerciseCardProps) {
+export function ExerciseCard({
+  exercise,
+  onAnswer,
+  onContinue,
+  noHelp = false,
+  quickMode = false,
+  itemTimeLimitSec = null,
+}: ExerciseCardProps) {
   const { settings } = useSettings()
   const { openLesson } = useLessonDrawer()
   const [startTime] = useState(Date.now())
@@ -50,9 +60,11 @@ export function ExerciseCard({ exercise, onAnswer, onContinue }: ExerciseCardPro
   const [builtTileIds, setBuiltTileIds] = useState<string[]>([])
   const [sequencePlaying, setSequencePlaying] = useState(false)
   const [sequenceStep, setSequenceStep] = useState<number | null>(null)
+  const [itemRemaining, setItemRemaining] = useState<number | null>(null)
   const listenAbortRef = useRef<(() => void) | null>(null)
   const sequenceAbortRef = useRef<(() => void) | null>(null)
   const continueRef = useRef<HTMLDivElement>(null)
+  const timedOutRef = useRef(false)
 
   const usesPreviewConfirm =
     exercise.format === 'pick-audio' || exercise.format === 'hear-pick-letter'
@@ -102,11 +114,22 @@ export function ExerciseCard({ exercise, onAnswer, onContinue }: ExerciseCardPro
     setBuiltTileIds([])
     setSequencePlaying(false)
     setSequenceStep(null)
+    setItemRemaining(itemTimeLimitSec)
+    timedOutRef.current = false
     listenAbortRef.current?.()
     listenAbortRef.current = null
     sequenceAbortRef.current?.()
     sequenceAbortRef.current = null
-  }, [exercise.id])
+  }, [exercise.id, itemTimeLimitSec])
+
+  useEffect(() => {
+    if (!itemTimeLimitSec || submitted) return
+    setItemRemaining(itemTimeLimitSec)
+    const interval = setInterval(() => {
+      setItemRemaining((r) => (r === null || r <= 1 ? 0 : r - 1))
+    }, 1000)
+    return () => clearInterval(interval)
+  }, [exercise.id, itemTimeLimitSec, submitted])
 
   useEffect(() => {
     if (!settings?.autoPlayAudio) return
@@ -124,7 +147,7 @@ export function ExerciseCard({ exercise, onAnswer, onContinue }: ExerciseCardPro
   }, [exercise.id, settings?.autoPlayAudio])
 
   useEffect(() => {
-    if (!submitted) return
+    if (!submitted || quickMode) return
     const timer = setTimeout(() => {
       continueRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' })
     }, 200)
@@ -271,6 +294,16 @@ export function ExerciseCard({ exercise, onAnswer, onContinue }: ExerciseCardPro
     onAnswer(correct, Date.now() - startTime, meta)
   }
 
+  const finishRef = useRef(finish)
+  finishRef.current = finish
+
+  useEffect(() => {
+    if (itemRemaining === 0 && !submitted && itemTimeLimitSec && !timedOutRef.current) {
+      timedOutRef.current = true
+      finishRef.current(false, '✗ Time\'s up!')
+    }
+  }, [itemRemaining, submitted, itemTimeLimitSec])
+
   const submitChoice = (index: number) => {
     if (submitted) return
     haptic('confirm')
@@ -415,13 +448,26 @@ export function ExerciseCard({ exercise, onAnswer, onContinue }: ExerciseCardPro
       <div className={`space-y-4 ${cardShake}`}>
         <div className="flex items-start justify-between gap-2">
           <p className="text-sm text-slate-400">{exercise.prompt}</p>
-          <button
-            type="button"
-            onClick={() => openLesson(exercise.moduleId, [exercise.letterId])}
-            className="shrink-0 rounded-lg bg-slate-800 px-2.5 py-1 text-xs text-red-400"
-          >
-            📖 Info
-          </button>
+          <div className="flex shrink-0 items-center gap-2">
+            {itemRemaining !== null && !submitted && (
+              <span
+                className={`text-xs font-mono tabular-nums ${
+                  itemRemaining <= 5 ? 'text-amber-400' : 'text-slate-500'
+                }`}
+              >
+                {itemRemaining}s
+              </span>
+            )}
+            {!noHelp && (
+              <button
+                type="button"
+                onClick={() => openLesson(exercise.moduleId, [exercise.letterId])}
+                className="rounded-lg bg-slate-800 px-2.5 py-1 text-xs text-red-400"
+              >
+                📖 Info
+              </button>
+            )}
+          </div>
         </div>
 
         {showLetter && (
@@ -705,7 +751,7 @@ export function ExerciseCard({ exercise, onAnswer, onContinue }: ExerciseCardPro
           <p className="text-center text-sm text-slate-400">{feedback}</p>
         )}
 
-        {submitted && (
+        {submitted && !quickMode && (
           <div ref={continueRef} className="mt-4 space-y-3 border-t border-slate-800 pt-4">
             <AnswerReview items={reviewItems} moduleId={exercise.moduleId} />
             <button

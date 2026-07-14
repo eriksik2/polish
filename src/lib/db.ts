@@ -37,6 +37,14 @@ export interface AppSettings {
   showIpaInLessons: boolean
 }
 
+export interface LessonProgressRecord {
+  lessonId: string
+  completedSectionIds: string[]
+  finalQuizPassed: boolean
+  completedAt?: number
+  weakSectionIds: string[]
+}
+
 const DEFAULT_ENABLED: Record<ExerciseFormat, boolean> = Object.fromEntries(
   EXERCISE_FORMATS.map((f) => [f.id, !FORMATS_DISABLED_BY_DEFAULT.has(f.id)]),
 ) as Record<ExerciseFormat, boolean>
@@ -52,6 +60,7 @@ export class PolishLearnDB extends Dexie {
   attempts!: EntityTable<AttemptRecord, 'id'>
   memory!: EntityTable<MemoryState, 'id'>
   settings!: EntityTable<AppSettings, 'id'>
+  lessonProgress!: EntityTable<LessonProgressRecord, 'lessonId'>
 
   constructor() {
     super('PolishLearnDB')
@@ -59,6 +68,9 @@ export class PolishLearnDB extends Dexie {
       attempts: '++id, timestamp, moduleId, letterId, format, correct',
       memory: 'id, moduleId, letterId, format, nextReview',
       settings: 'id',
+    })
+    this.version(2).stores({
+      lessonProgress: 'lessonId',
     })
   }
 }

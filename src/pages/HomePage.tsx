@@ -50,7 +50,7 @@ export function HomePage() {
               }`}
             >
               <Link
-                to={mod.available ? `/practice?module=${mod.id}` : '#'}
+                to={mod.available ? `/learn` : '#'}
                 className={`flex items-center gap-3 ${mod.available ? 'hover:opacity-90' : 'pointer-events-none'}`}
               >
                 <span className="text-3xl font-serif text-red-400">{mod.icon}</span>
@@ -62,16 +62,16 @@ export function HomePage() {
               {mod.available && (
                 <div className="mt-3 flex gap-2 text-xs">
                   <Link
-                    to={`/practice?module=${mod.id}`}
+                    to="/practice"
                     className="rounded-lg bg-red-600/20 px-2 py-1 text-red-400"
                   >
                     Practice
                   </Link>
                   <Link
-                    to={`/lessons?module=${mod.id}`}
+                    to={`/learn`}
                     className="rounded-lg bg-slate-900 px-2 py-1 text-slate-400"
                   >
-                    Knowledge
+                    Learn
                   </Link>
                 </div>
               )}
@@ -81,10 +81,10 @@ export function HomePage() {
       </section>
 
       <Link
-        to="/practice?module=alphabet"
+        to="/practice"
         className="block w-full rounded-2xl bg-red-600 py-4 text-center text-lg font-semibold active:scale-[0.98] transition-transform"
       >
-        Start practicing
+        Start a practice session
       </Link>
     </div>
   )
