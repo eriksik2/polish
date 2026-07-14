@@ -1,5 +1,7 @@
 import type { ExerciseFormat } from '../data/modules'
+import { getWord } from '../data/wordBank'
 import { getModuleUnits, getUnit, type PolishLetter } from '../data/moduleRegistry'
+import { renderHighlightedWord, wordContainsUnit } from './graphemes'
 import { similarityScore } from './similarity'
 import { scorePronunciation } from './speech/stt'
 
@@ -68,12 +70,112 @@ export function buildAnswerReview(params: {
   transcript?: string
   alternatives?: string[]
   optionUnitIds?: { label: string; unitId: string }[]
+  optionWordIds?: { label: string; wordId: string; meaning?: string }[]
+  targetWordId?: string
+  highlightIndex?: number
   answerCorrect?: boolean
 }): ReviewItem[] {
   const correct = getUnit(params.moduleId, params.correctUnitId)
   if (!correct) return []
 
   const items: ReviewItem[] = []
+
+  const targetWord = params.targetWordId ? getWord(params.targetWordId) : undefined
+
+  // Word-matching formats
+  if (params.format === 'unit-pick-word' || params.format === 'hear-unit-pick-word') {
+    items.push({
+      unitId: correct.id,
+      label: correct.upper,
+      status: 'correct',
+      heading: `✓ Find a word with ${correct.upper}`,
+      body: `${correct.upper} (${correct.englishApprox}) — choose a word whose spelling includes this grapheme.`,
+    })
+
+    const correctWordId = params.targetWordId
+    const correctW = correctWordId ? getWord(correctWordId) : undefined
+    if (correctW) {
+      items.push({
+        label: correctW.word,
+        status: 'correct',
+        heading: `✓ ${correctW.word} (${correctW.meaning})`,
+        body: `Graphemes: ${correctW.graphemes.join(' · ')} — includes ${correct.upper}.`,
+      })
+    }
+
+    const selectedWordId = params.selectedUnitId
+    if (selectedWordId && selectedWordId !== correctWordId) {
+      const picked = getWord(selectedWordId)
+      items.push({
+        label: picked?.word ?? selectedWordId,
+        status: 'your-answer',
+        heading: `Your choice: ${picked?.word ?? selectedWordId}`,
+        body: picked
+          ? wordContainsUnit(picked.word, correct.id)
+            ? `This word does contain ${correct.upper}, but another option was intended for this exercise.`
+            : `"${picked.word}" does not contain ${correct.upper}. Its graphemes: ${picked.graphemes.join(' · ')}.`
+          : 'Not the expected word.',
+      })
+    }
+
+    for (const opt of params.optionWordIds ?? []) {
+      if (opt.wordId === correctWordId) continue
+      if (opt.wordId === selectedWordId) continue
+      const w = getWord(opt.wordId)
+      items.push({
+        label: opt.label,
+        status: 'wrong-option',
+        heading: `${opt.label} — why not`,
+        body: w
+          ? `"${w.word}" (${w.meaning}) has graphemes ${w.graphemes.join(' · ')} — no ${correct.upper}.`
+          : 'Does not contain the target grapheme.',
+      })
+    }
+    return items
+  }
+
+  if (params.format === 'word-pick-unit' && targetWord && params.highlightIndex !== undefined) {
+    const { before, highlight, after } = renderHighlightedWord(
+      targetWord.word,
+      params.highlightIndex,
+    )
+    items.push({
+      unitId: correct.id,
+      label: correct.upper,
+      status: 'correct',
+      heading: `✓ ${correct.upper} is correct`,
+      body: `In "${targetWord.word}" (${targetWord.meaning}), the highlighted part "${highlight}" is ${correct.upper} (${correct.ipa}). Full spelling: ${before}[${highlight}]${after}.`,
+    })
+
+    const selectedId = params.selectedUnitId
+    if (selectedId && selectedId !== correct.id) {
+      const picked = getUnit(params.moduleId, selectedId)
+      if (picked) {
+        items.push({
+          unitId: picked.id,
+          label: picked.upper,
+          status: 'your-answer',
+          heading: `Your choice: ${picked.upper}`,
+          body: `The highlighted grapheme is ${correct.upper}, not ${picked.upper}. ${compareUnits(correct, picked)}`,
+        })
+      }
+    }
+
+    for (const opt of params.optionUnitIds ?? []) {
+      if (opt.unitId === correct.id || opt.unitId === selectedId) continue
+      const unit = getUnit(params.moduleId, opt.unitId)
+      if (unit) {
+        items.push({
+          unitId: unit.id,
+          label: unit.upper,
+          status: 'wrong-option',
+          heading: `${unit.upper} — why not`,
+          body: `The highlighted sound in "${targetWord.word}" is ${correct.upper}, not ${unit.upper}.`,
+        })
+      }
+    }
+    return items
+  }
 
   // Always explain the correct answer
   const heardName =

@@ -4,6 +4,7 @@ import {
   type PolishLetter,
 } from '../data/moduleRegistry'
 import type { ExerciseFormat } from '../data/modules'
+import { pickUnitOptionsForWord, pickWordOptions } from '../data/wordBank'
 import { pickSimilarLabels, pickSimilarUnits } from '../lib/similarity'
 import { shuffle } from './scheduler'
 
@@ -17,6 +18,9 @@ export interface Exercise {
   correctAnswer: string
   correctIndex?: number
   prompt: string
+  /** Word used in word-matching formats */
+  targetWordId?: string
+  highlightIndex?: number
 }
 
 export interface ExerciseOption {
@@ -25,6 +29,8 @@ export interface ExerciseOption {
   unitId?: string
   letterId?: string
   audioLetterId?: string
+  wordId?: string
+  meaning?: string
 }
 
 let exerciseCounter = 0
@@ -50,6 +56,12 @@ export function generateExercise(
       return generateHearPickLetter(id, moduleId, letter)
     case 'hear-type-letter':
       return generateHearTypeLetter(id, moduleId, letter)
+    case 'unit-pick-word':
+      return generateUnitPickWord(id, moduleId, letter)
+    case 'hear-unit-pick-word':
+      return generateHearUnitPickWord(id, moduleId, letter)
+    case 'word-pick-unit':
+      return generateWordPickUnit(id, moduleId, letter)
     default:
       return null
   }
@@ -164,6 +176,96 @@ function generateHearTypeLetter(id: string, moduleId: string, letter: PolishLett
   }
 }
 
+function generateUnitPickWord(id: string, moduleId: string, letter: PolishLetter): Exercise | null {
+  const picked = pickWordOptions(moduleId, letter.id, 4)
+  if (!picked) return null
+
+  const options: ExerciseOption[] = shuffle([
+    {
+      id: 'correct',
+      label: picked.correct.word,
+      wordId: picked.correct.id,
+      meaning: picked.correct.meaning,
+    },
+    ...picked.distractors.map((w, i) => ({
+      id: `d${i}`,
+      label: w.word,
+      wordId: w.id,
+      meaning: w.meaning,
+    })),
+  ])
+  const correctIndex = options.findIndex((o) => o.id === 'correct')
+
+  return {
+    id,
+    moduleId,
+    letterId: letter.id,
+    format: 'unit-pick-word',
+    letter,
+    options,
+    correctAnswer: picked.correct.id,
+    correctIndex,
+    targetWordId: picked.correct.id,
+    prompt: `Which word contains “${letter.upper}”?`,
+  }
+}
+
+function generateHearUnitPickWord(id: string, moduleId: string, letter: PolishLetter): Exercise | null {
+  const base = generateUnitPickWord(id, moduleId, letter)
+  if (!base) return null
+  return {
+    ...base,
+    id,
+    format: 'hear-unit-pick-word',
+    prompt: isDigraphModule(moduleId)
+      ? 'Listen to the digraph sound — which word contains it?'
+      : 'Listen to the letter sound — which word contains it?',
+  }
+}
+
+function generateWordPickUnit(id: string, moduleId: string, letter: PolishLetter): Exercise | null {
+  const picked = pickWordOptions(moduleId, letter.id, 1)
+  if (!picked) return null
+
+  const word = picked.correct
+  const link = word.unitLinks.find((l) => l.unitId === letter.id)
+  if (!link) return null
+
+  const units = pickUnitOptionsForWord(
+    moduleId,
+    word,
+    letter.id,
+    link.index,
+    4,
+    (uid) => getUnit(moduleId, uid),
+  )
+  if (!units) return null
+
+  const options: ExerciseOption[] = shuffle([
+    { id: 'correct', label: units.correct.upper, unitId: units.correct.id },
+    ...units.distractors.map((u, i) => ({
+      id: `d${i}`,
+      label: u.upper,
+      unitId: u.id,
+    })),
+  ])
+  const correctIndex = options.findIndex((o) => o.id === 'correct')
+
+  return {
+    id,
+    moduleId,
+    letterId: letter.id,
+    format: 'word-pick-unit',
+    letter,
+    options,
+    correctAnswer: letter.id,
+    correctIndex,
+    targetWordId: word.id,
+    highlightIndex: link.index,
+    prompt: 'Which letter or digraph is highlighted?',
+  }
+}
+
 export function normalizeLetterInput(input: string): string {
   return input.trim().toLowerCase()
 }
@@ -190,5 +292,23 @@ export function getSelectedUnitId(
 ): string | undefined {
   if (selectedIndex === null || !exercise.options) return undefined
   const opt = exercise.options[selectedIndex]
-  return opt.unitId ?? opt.letterId ?? opt.audioLetterId
+  return opt.unitId ?? opt.letterId ?? opt.audioLetterId ?? opt.wordId
+}
+
+export function getOptionWords(exercise: Exercise): { label: string; wordId: string; meaning?: string }[] {
+  if (!exercise.options) return []
+  return exercise.options
+    .filter((o) => o.wordId)
+    .map((o) => ({
+      label: o.label,
+      wordId: o.wordId!,
+      meaning: o.meaning,
+    }))
+}
+export function getSelectedWordId(
+  exercise: Exercise,
+  selectedIndex: number | null,
+): string | undefined {
+  if (selectedIndex === null || !exercise.options) return undefined
+  return exercise.options[selectedIndex]?.wordId
 }

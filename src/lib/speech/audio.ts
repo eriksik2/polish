@@ -1,5 +1,6 @@
 import letterManifest from '../../data/letter-audio-manifest.json'
 import digraphManifest from '../../data/digraph-audio-manifest.json'
+import wordManifest from '../../data/word-audio-manifest.json'
 
 const BASE = import.meta.env.BASE_URL
 
@@ -44,6 +45,41 @@ export function playUnitAudio(
   options?: { onEnd?: () => void; onError?: () => void },
 ): boolean {
   const url = audioUrl(moduleId, unitId)
+  if (!url) {
+    options?.onError?.()
+    return false
+  }
+
+  stopUnitAudio()
+  const audio = new Audio(url)
+  currentAudio = audio
+  audio.onended = () => {
+    if (currentAudio === audio) currentAudio = null
+    options?.onEnd?.()
+  }
+  audio.onerror = () => {
+    if (currentAudio === audio) currentAudio = null
+    options?.onError?.()
+  }
+  void audio.play().catch(() => options?.onError?.())
+  return true
+}
+
+export function hasWordRecording(wordId: string): boolean {
+  return Boolean(wordManifest[wordId as keyof typeof wordManifest])
+}
+
+function wordAudioUrl(wordId: string): string | null {
+  const rel = wordManifest[wordId as keyof typeof wordManifest]
+  if (!rel) return null
+  return `${BASE}${rel}`
+}
+
+export function playWordAudio(
+  wordId: string,
+  options?: { onEnd?: () => void; onError?: () => void },
+): boolean {
+  const url = wordAudioUrl(wordId)
   if (!url) {
     options?.onError?.()
     return false

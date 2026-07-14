@@ -32,6 +32,23 @@ export function PracticePage() {
 
   const nextExercise = useCallback(
     async (items?: { letterId: string; format: string }[]) => {
+      const tryGenerate = (q: { letterId: string; format: string }[]) => {
+        for (let i = 0; i < q.length; i++) {
+          const item = q[i]
+          const ex = generateExercise(
+            moduleId,
+            item.letterId,
+            item.format as Exercise['format'],
+          )
+          if (ex) {
+            setQueue(q.slice(i + 1))
+            setExercise(ex)
+            return true
+          }
+        }
+        return false
+      }
+
       const q = items ?? queue
       if (q.length === 0) {
         const fresh = await loadQueue()
@@ -39,16 +56,15 @@ export function PracticePage() {
           setExercise(null)
           return
         }
-        const [first, ...rest] = fresh
-        setQueue(rest)
-        const ex = generateExercise(moduleId, first.letterId, first.format as Exercise['format'])
-        setExercise(ex)
+        if (!tryGenerate(fresh)) setExercise(null)
         return
       }
-      const [first, ...rest] = q
-      setQueue(rest)
-      const ex = generateExercise(moduleId, first.letterId, first.format as Exercise['format'])
-      setExercise(ex)
+      if (!tryGenerate(q)) {
+        setQueue([])
+        const fresh = await loadQueue()
+        if (fresh && fresh.length > 0) tryGenerate(fresh)
+        else setExercise(null)
+      }
     },
     [queue, loadQueue, moduleId],
   )

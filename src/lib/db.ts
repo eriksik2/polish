@@ -1,11 +1,8 @@
 import Dexie, { type EntityTable } from 'dexie'
+import type { ExerciseFormat } from '../data/modules'
+import { EXERCISE_FORMATS } from '../data/modules'
 
-export type ExerciseFormat =
-  | 'pick-english'
-  | 'pick-audio'
-  | 'speak-letter'
-  | 'hear-pick-letter'
-  | 'hear-type-letter'
+export type { ExerciseFormat }
 
 export interface AttemptRecord {
   id?: number
@@ -40,15 +37,13 @@ export interface AppSettings {
   showIpaInLessons: boolean
 }
 
+const DEFAULT_ENABLED: Record<ExerciseFormat, boolean> = Object.fromEntries(
+  EXERCISE_FORMATS.map((f) => [f.id, true]),
+) as Record<ExerciseFormat, boolean>
+
 const DEFAULT_SETTINGS: AppSettings = {
   id: 'settings',
-  enabledFormats: {
-    'pick-english': true,
-    'pick-audio': true,
-    'speak-letter': true,
-    'hear-pick-letter': true,
-    'hear-type-letter': true,
-  },
+  enabledFormats: DEFAULT_ENABLED,
   autoPlayAudio: true,
   showIpaInLessons: true,
 }
@@ -72,7 +67,14 @@ export const db = new PolishLearnDB()
 
 export async function getSettings(): Promise<AppSettings> {
   const existing = await db.settings.get('settings')
-  if (existing) return existing
+  if (existing) {
+    for (const f of EXERCISE_FORMATS) {
+      if (existing.enabledFormats[f.id] === undefined) {
+        existing.enabledFormats[f.id] = true
+      }
+    }
+    return existing
+  }
   await db.settings.put(DEFAULT_SETTINGS)
   return DEFAULT_SETTINGS
 }
