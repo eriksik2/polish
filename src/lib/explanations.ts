@@ -76,12 +76,16 @@ export function buildAnswerReview(params: {
   const items: ReviewItem[] = []
 
   // Always explain the correct answer
+  const heardName =
+    params.format === 'hear-pick-letter' || params.format === 'hear-type-letter'
   items.push({
     unitId: correct.id,
     label: correct.upper,
     status: 'correct',
     heading: `✓ ${correct.upper} is correct`,
-    body: `${unitSummary(correct)} ${correct.tips[0] ?? ''}`.trim(),
+    body: heardName
+      ? `You heard "${correct.polishName}" — the Polish name for ${correct.upper}. ${unitSummary(correct)} ${correct.tips[0] ?? ''}`.trim()
+      : `${unitSummary(correct)} ${correct.tips[0] ?? ''}`.trim(),
   })
 
   if (params.format === 'speak-letter') {
