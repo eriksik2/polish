@@ -1,0 +1,22 @@
+@import "tailwindcss";
+
+@theme {
+  --color-polish-red: #dc2626;
+  --color-polish-white: #f8fafc;
+  --color-surface: #1e293b;
+  --color-surface-2: #334155;
+}
+
+html {
+  -webkit-tap-highlight-color: transparent;
+}
+
+body {
+  @apply bg-slate-950 text-slate-100 antialiased;
+  min-height: 100dvh;
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+#root {
+  min-height: 100dvh;
+}
