@@ -14,7 +14,14 @@ html {
 body {
   @apply bg-slate-950 text-slate-100 antialiased;
   min-height: 100dvh;
-  padding-bottom: env(safe-area-inset-bottom);
+  margin: 0;
+}
+
+/* Standalone PWA: safe areas handled on Layout, not doubled on body */
+@media (display-mode: standalone) {
+  body {
+    padding: 0;
+  }
 }
 
 @keyframes celebrate {
@@ -62,4 +69,25 @@ body {
 
 .option-playing {
   @apply border-amber-400 bg-amber-500/10;
+}
+
+.app-shell {
+  padding-bottom: calc(4rem + env(safe-area-inset-bottom, 0px));
+}
+
+@media (display-mode: standalone) {
+  .app-shell {
+    padding-top: env(safe-area-inset-top, 0px);
+  }
+}
+
+@media (min-width: 768px) {
+  .app-shell {
+    padding-top: 1rem;
+    padding-bottom: 1rem;
+  }
+}
+
+.app-main {
+  min-height: calc(100dvh - 4rem - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px));
 }

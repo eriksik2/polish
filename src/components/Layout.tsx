@@ -33,8 +33,8 @@ export function BottomNav() {
 
 export function Layout({ children }: { children: React.ReactNode }) {
   return (
-    <div className="mx-auto min-h-dvh max-w-lg md:max-w-2xl pb-16 md:pb-4 md:pt-4">
-      {children}
+    <div className="app-shell mx-auto min-h-dvh max-w-lg md:max-w-2xl">
+      <main className="app-main">{children}</main>
       <BottomNav />
     </div>
   )
