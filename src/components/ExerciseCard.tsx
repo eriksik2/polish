@@ -45,6 +45,7 @@ export function ExerciseCard({ exercise, onAnswer, onContinue }: ExerciseCardPro
   const [waveformLevels, setWaveformLevels] = useState<number[]>([])
   const [listenStatus, setListenStatus] = useState<'idle' | 'listening' | 'processing'>('idle')
   const listenAbortRef = useRef<(() => void) | null>(null)
+  const continueRef = useRef<HTMLDivElement>(null)
 
   const usesPreviewConfirm =
     exercise.format === 'pick-audio' || exercise.format === 'hear-pick-letter'
@@ -93,6 +94,14 @@ export function ExerciseCard({ exercise, onAnswer, onContinue }: ExerciseCardPro
       return () => clearTimeout(timer)
     }
   }, [exercise.id, settings?.autoPlayAudio])
+
+  useEffect(() => {
+    if (!submitted) return
+    const timer = setTimeout(() => {
+      continueRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' })
+    }, 200)
+    return () => clearTimeout(timer)
+  }, [submitted])
 
   const playLetter = useCallback(
     (unitId: string, index?: number) => {
@@ -495,16 +504,20 @@ export function ExerciseCard({ exercise, onAnswer, onContinue }: ExerciseCardPro
           <p className="text-center text-sm text-slate-400">{feedback}</p>
         )}
 
-        {submitted && <AnswerReview items={reviewItems} />}
-
         {submitted && (
-          <button
-            type="button"
-            onClick={onContinue}
-            className="w-full rounded-xl bg-slate-700 py-3.5 font-semibold text-slate-100 active:scale-[0.98] transition-transform"
+          <div
+            ref={continueRef}
+            className="sticky bottom-16 z-10 -mx-4 mt-2 border-t border-slate-800/80 bg-slate-900/95 px-4 pt-3 pb-1 backdrop-blur md:bottom-4"
           >
-            Continue →
-          </button>
+            <AnswerReview items={reviewItems} />
+            <button
+              type="button"
+              onClick={onContinue}
+              className="mt-3 w-full rounded-xl bg-slate-700 py-3 font-semibold text-slate-100 active:scale-[0.98] transition-transform"
+            >
+              Continue →
+            </button>
+          </div>
         )}
 
         {usesAudio && !submitted && (

@@ -1,6 +1,8 @@
 import { POLISH_ALPHABET } from '../data/alphabet'
 import { POLISH_DIGRAPHS } from '../data/digraphs'
 import type { PolishLetter } from '../data/alphabet'
+import { getUnit } from '../data/moduleRegistry'
+import { pickSimilarUnits, scoreWordAsDistractor } from '../lib/similarity'
 import {
   findHighlightIndex,
   graphemeAtIndex,
@@ -147,22 +149,56 @@ export function getWordsWithoutUnit(moduleId: string, unitId: string): WordEntry
   )
 }
 
-/** Pick words for unit→word exercise: 1 correct + distractors that do NOT contain the unit */
+/** Pick words for unit→word exercise: 1 correct + similar-but-unambiguous distractors */
 export function pickWordOptions(
   moduleId: string,
   unitId: string,
   count: number,
 ): { correct: WordEntry; distractors: WordEntry[] } | null {
+  const targetUnit = getUnit(moduleId, unitId)
+  if (!targetUnit) return null
+
   const candidates = getWordsForUnit(moduleId, unitId)
   if (candidates.length === 0) return null
 
   const correct = candidates[Math.floor(Math.random() * candidates.length)]
   const pool = getWordsWithoutUnit(moduleId, unitId).filter((w) => w.id !== correct.id)
+  const needed = count - 1
 
-  if (pool.length < count - 1) return null
+  if (pool.length < needed) return null
 
-  const shuffled = [...pool].sort(() => Math.random() - 0.5)
-  return { correct, distractors: shuffled.slice(0, count - 1) }
+  const lookup = (id: string) => getUnit(moduleId, id)
+  const ranked = pool
+    .map((w) => ({
+      word: w,
+      score: scoreWordAsDistractor(w.graphemes, targetUnit, moduleId, lookup),
+    }))
+    .sort((a, b) => b.score - a.score)
+
+  const picked: WordEntry[] = []
+  const used = new Set<string>()
+
+  // Prefer words with at least one similar grapheme (score ≥ 35 ≈ one confused neighbour)
+  for (const { word, score } of ranked) {
+    if (picked.length >= needed) break
+    if (score < 35 && picked.length >= Math.min(2, needed)) continue
+    if (!used.has(word.id)) {
+      picked.push(word)
+      used.add(word.id)
+    }
+  }
+
+  for (const { word } of ranked) {
+    if (picked.length >= needed) break
+    if (!used.has(word.id)) {
+      picked.push(word)
+      used.add(word.id)
+    }
+  }
+
+  if (picked.length < needed) return null
+
+  return { correct, distractors: picked.slice(0, needed) }
 }
 
 /** Pick unit options for word→unit exercise at a specific highlight index */
@@ -182,34 +218,15 @@ export function pickUnitOptionsForWord(
     return null
   }
 
-  const confused = correct.confusedWith ?? []
-  const pool = confused
-    .map((id) => getUnit(id))
-    .filter((u): u is PolishLetter => Boolean(u))
-    .filter((u) => u.id !== unitId)
-    .filter((u) => word.graphemes[highlightIndex] !== u.id)
+  const highlightGrapheme = word.graphemes[highlightIndex]
+  const distractors = pickSimilarUnits(moduleId, correct, count - 1).filter(
+    (u) => u.id !== unitId && u.id !== highlightGrapheme,
+  )
 
-  // Distractors must NOT appear at highlight index (only one correct grapheme there)
-  const valid = pool.filter((u) => {
-    const g = word.graphemes[highlightIndex]
-    return g !== u.id
-  })
-
-  while (valid.length < count - 1) {
-    const extras = (moduleId === 'digraphs' ? POLISH_DIGRAPHS : POLISH_ALPHABET).filter(
-      (u) =>
-        u.id !== unitId &&
-        word.graphemes[highlightIndex] !== u.id &&
-        !valid.some((v) => v.id === u.id),
-    )
-    if (extras.length === 0) break
-    valid.push(extras[Math.floor(Math.random() * extras.length)])
-  }
-
-  if (valid.length < count - 1) return null
+  if (distractors.length < count - 1) return null
 
   return {
     correct,
-    distractors: valid.slice(0, count - 1),
+    distractors: distractors.slice(0, count - 1),
   }
 }

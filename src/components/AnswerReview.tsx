@@ -8,9 +8,8 @@ export function AnswerReview({ items }: AnswerReviewProps) {
   if (items.length === 0) return null
 
   return (
-    <div className="mt-6 space-y-3 border-t border-slate-800 pt-5">
+    <div className="space-y-2">
       <p className="text-sm font-medium text-slate-300">Answer breakdown</p>
-      <p className="text-xs text-slate-500">Scroll for details on each choice</p>
 
       {items.map((item, i) => (
         <div

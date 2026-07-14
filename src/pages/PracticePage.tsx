@@ -140,17 +140,28 @@ export function PracticePage() {
 
   return (
     <div className="p-4 space-y-4">
-      <header className="flex items-center justify-between">
+      <header className="flex items-center justify-between gap-2">
         <div>
           <h1 className="text-xl font-bold">Practice</h1>
           <p className="text-xs text-slate-500">{moduleInfo?.title ?? moduleId} module</p>
         </div>
-        <div className="text-right text-sm">
-          <p className="text-slate-400">
-            Session: {sessionStats.correct}/{sessionStats.done}
-          </p>
-          {exercise && (
-            <p className="text-xs text-red-400/80">Format {formatLabel}</p>
+        <div className="flex flex-col items-end gap-1">
+          <div className="text-right text-sm">
+            <p className="text-slate-400">
+              Session: {sessionStats.correct}/{sessionStats.done}
+            </p>
+            {exercise && (
+              <p className="text-xs text-red-400/80">Format {formatLabel}</p>
+            )}
+          </div>
+          {exercise && !awaitingContinue && (
+            <button
+              type="button"
+              onClick={handleNext}
+              className="text-[11px] text-slate-600 underline-offset-2 hover:text-slate-400 hover:underline"
+            >
+              skip
+            </button>
           )}
         </div>
       </header>
@@ -173,15 +184,6 @@ export function PracticePage() {
             onAnswer={handleAnswer}
             onContinue={handleNext}
           />
-          {!awaitingContinue && (
-            <button
-              type="button"
-              onClick={handleNext}
-              className="mt-4 w-full rounded-xl border border-slate-700 py-3 text-sm text-slate-300 hover:bg-slate-800"
-            >
-              Skip → Next
-            </button>
-          )}
         </div>
       ) : (
         <p className="text-slate-400">No exercises available.</p>

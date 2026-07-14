@@ -36,6 +36,40 @@ function neighboursFor(moduleId: string, id: string): string[] {
   return map[id] ?? []
 }
 
+/** Unit ids that sound or look confusable with the target */
+export function similarUnitIds(moduleId: string, unit: PolishLetter): Set<string> {
+  return new Set([...(unit.confusedWith ?? []), ...neighboursFor(moduleId, unit.id)])
+}
+
+/**
+ * Score how good a word is as a distractor for unit→word exercises.
+ * Higher = contains similar (but not identical) graphemes — good for beginners.
+ */
+export function scoreWordAsDistractor(
+  graphemes: string[],
+  targetUnit: PolishLetter,
+  moduleId: string,
+  getUnit: (id: string) => PolishLetter | undefined,
+): number {
+  const similarIds = similarUnitIds(moduleId, targetUnit)
+  let bestMatch = 0
+  let matchCount = 0
+
+  for (const g of graphemes) {
+    if (g === targetUnit.id) continue
+    if (!similarIds.has(g)) continue
+    const neighbour = getUnit(g)
+    if (!neighbour) continue
+    bestMatch = Math.max(bestMatch, similarityScore(targetUnit, neighbour))
+    matchCount++
+  }
+
+  if (matchCount === 0) return 0
+  // One clear neighbour grapheme is ideal; too many similar letters gets confusing
+  const countBonus = matchCount === 1 ? 25 : matchCount === 2 ? 10 : -10
+  return bestMatch + countBonus
+}
+
 /** Rank how similar two units are (higher = more confusable) */
 export function similarityScore(a: PolishLetter, b: PolishLetter): number {
   if (a.id === b.id) return 100
