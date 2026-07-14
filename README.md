@@ -15,7 +15,7 @@ A mobile-first web app for learning and practicing Polish. Start with the **alph
 - **Toggle exercise formats** in Settings
 - **Robust tracking** — accuracy, response time, streaks by letter, format, and timeframe
 - **SM-2 spaced repetition** scheduler prioritizes weak/due items
-- **Polish TTS/STT** via Web Speech API (`pl-PL`)
+- **Polish letter audio** — native recordings from Wikimedia Commons (public domain), not browser TTS
 - **PWA** — installable on phone, works on desktop
 
 ## Knowledge base

@@ -7,7 +7,6 @@ import { generateExercise } from '../lib/exercises'
 import type { Exercise } from '../lib/exercises'
 import { buildExerciseQueue, qualityFromAttempt } from '../lib/scheduler'
 import { recordAttempt, updateMemoryAfterAttempt } from '../lib/tracking'
-import { refreshVoices } from '../lib/speech/tts'
 import { EXERCISE_FORMATS } from '../data/modules'
 
 export function PracticePage() {
@@ -50,13 +49,6 @@ export function PracticePage() {
     },
     [queue, loadQueue, moduleId],
   )
-
-  useEffect(() => {
-    refreshVoices()
-    if (typeof window !== 'undefined' && window.speechSynthesis) {
-      window.speechSynthesis.onvoiceschanged = () => refreshVoices()
-    }
-  }, [])
 
   useEffect(() => {
     if (loading || !settings) return

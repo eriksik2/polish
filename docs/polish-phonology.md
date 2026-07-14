@@ -56,10 +56,9 @@ Soft sounds involve the **middle of the tongue raised** — often described as h
 
 ### Text-to-speech (TTS)
 
-- Use `pl-PL` locale
-- Prefer voices: Google polski, Microsoft Paulina/Zofia, any native pl-PL voice
-- For isolated letters: speak the **Polish letter name** (e.g. "eł" for ł)
-- For sounds: use **example words** with the letter (e.g. "łapa" for ł sound)
+- **Letter exercises (B, D, E)** use bundled native recordings from Wikimedia Commons (public domain). See `public/audio/ATTRIBUTION.md`.
+- Browser `speechSynthesis` is **not** used for letter sounds — quality is insufficient for Polish.
+- Recordings live in `public/audio/letters/`; manifest in `src/data/letter-audio-manifest.json`.
 
 ### Speech recognition (STT)
 

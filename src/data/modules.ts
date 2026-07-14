@@ -21,7 +21,7 @@ export const EXERCISE_FORMATS: {
     id: 'pick-audio',
     label: 'Pick audio',
     shortLabel: 'B',
-    description: 'See a letter → pick the matching pronunciation',
+    description: 'See a letter → listen to options, then confirm your choice',
   },
   {
     id: 'speak-letter',

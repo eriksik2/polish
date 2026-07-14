@@ -17,6 +17,49 @@ body {
   padding-bottom: env(safe-area-inset-bottom);
 }
 
-#root {
-  min-height: 100dvh;
+@keyframes celebrate {
+  0% { opacity: 0; transform: scale(0.85); }
+  40% { opacity: 1; transform: scale(1.05); }
+  100% { opacity: 1; transform: scale(1); }
+}
+
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  15%, 45%, 75% { transform: translateX(-6px); }
+  30%, 60%, 90% { transform: translateX(6px); }
+}
+
+@keyframes pop {
+  0% { transform: scale(0.5); }
+  70% { transform: scale(1.15); }
+  100% { transform: scale(1); }
+}
+
+@keyframes sparkle {
+  0%, 100% { opacity: 0.4; transform: translateY(0); }
+  50% { opacity: 1; transform: translateY(-4px); }
+}
+
+.animate-celebrate {
+  animation: celebrate 0.45s ease-out;
+}
+
+.animate-shake {
+  animation: shake 0.5s ease-in-out;
+}
+
+.animate-pop {
+  animation: pop 0.4s ease-out;
+}
+
+.animate-sparkle {
+  animation: sparkle 0.8s ease-in-out infinite;
+}
+
+.option-selected {
+  @apply border-red-400 bg-red-500/15 ring-2 ring-red-400/50;
+}
+
+.option-playing {
+  @apply border-amber-400 bg-amber-500/10;
 }

@@ -41,9 +41,9 @@ Exclude q, v, x (loanwords only).
 ## Speech technology
 
 ### TTS
-- Always `lang: 'pl-PL'`
-- Letter name for spelling: use `polishName` field
-- Sound demonstration: speak `examples[0].word`
+- **Always use bundled recordings** via `playLetterAudio()` from `src/lib/speech/audio.ts`
+- **Never** use browser `speechSynthesis` for letter sounds
+- Source: Wikimedia Commons `Polish_Alphabet.oga` (public domain)
 
 ### STT
 - Always `lang: 'pl-PL'`

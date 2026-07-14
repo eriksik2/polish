@@ -2,20 +2,15 @@ import { useEffect, useState } from 'react'
 import { EXERCISE_FORMATS } from '../data/modules'
 import { useSettings } from '../hooks/useSettings'
 import { isSTTSupported } from '../lib/speech/stt'
-import { getPolishVoices, isTTSSupported, refreshVoices } from '../lib/speech/tts'
+import { isLetterAudioAvailable, LETTER_AUDIO_ATTRIBUTION } from '../lib/speech/audio'
 import type { ExerciseFormat } from '../lib/db'
 
 export function SettingsPage() {
   const { settings, loading, update } = useSettings()
-  const [voices, setVoices] = useState<SpeechSynthesisVoice[]>([])
+  const [audioReady, setAudioReady] = useState(false)
 
   useEffect(() => {
-    const load = () => setVoices(getPolishVoices())
-    load()
-    refreshVoices()
-    if (window.speechSynthesis) {
-      window.speechSynthesis.onvoiceschanged = load
-    }
+    setAudioReady(isLetterAudioAvailable())
   }, [])
 
   if (loading || !settings) {
@@ -62,7 +57,7 @@ export function SettingsPage() {
       </section>
 
       <section>
-        <h2 className="text-sm font-medium text-slate-400 mb-3">Speech</h2>
+        <h2 className="text-sm font-medium text-slate-400 mb-3">Audio & speech</h2>
         <div className="space-y-3">
           <label className="flex items-center justify-between rounded-xl bg-slate-800/60 px-4 py-3">
             <span>Auto-play audio in exercises</span>
@@ -84,25 +79,20 @@ export function SettingsPage() {
             />
           </label>
 
-          <div className="rounded-xl bg-slate-800/60 px-4 py-3">
-            <label className="text-sm text-slate-400">Polish voice (TTS)</label>
-            <select
-              value={settings.preferredVoiceName ?? ''}
-              onChange={(e) => update({ preferredVoiceName: e.target.value || undefined })}
-              className="mt-2 w-full rounded-lg bg-slate-900 border border-slate-700 px-3 py-2 text-sm"
-            >
-              <option value="">System default (pl-PL)</option>
-              {voices.map((v) => (
-                <option key={v.name} value={v.name}>
-                  {v.name} ({v.lang})
-                </option>
-              ))}
-            </select>
+          <div className="rounded-xl bg-slate-800/60 px-4 py-3 text-sm space-y-2">
+            <p className="text-slate-400">Letter pronunciation</p>
+            <p>
+              {audioReady
+                ? '✓ Native recordings loaded (32 letters)'
+                : '✗ Recordings unavailable — audio exercises disabled'}
+            </p>
+            <p className="text-xs text-slate-500">
+              Source: {LETTER_AUDIO_ATTRIBUTION.title} by {LETTER_AUDIO_ATTRIBUTION.author} ({LETTER_AUDIO_ATTRIBUTION.license})
+            </p>
           </div>
 
           <div className="rounded-xl bg-slate-800/60 px-4 py-3 text-sm space-y-1">
-            <p className="text-slate-400">Capabilities</p>
-            <p>TTS: {isTTSSupported() ? '✓ Available' : '✗ Not supported'}</p>
+            <p className="text-slate-400">Speech recognition (speak exercises)</p>
             <p>STT: {isSTTSupported() ? '✓ Available (pl-PL)' : '✗ Not supported'}</p>
             <p className="text-xs text-slate-500 mt-2">
               For best Polish speech recognition, use Chrome on Android or desktop with microphone access.
