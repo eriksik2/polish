@@ -25,3 +25,7 @@ Digraph clips are **trimmed to the isolated consonant cluster** (not full exampl
 | sz | sz in szum | [Pl-szum.ogg](https://commons.wikimedia.org/wiki/File:Pl-szum.ogg) |
 
 All digraph source files are Polish pronunciation recordings on Wikimedia Commons (various authors; public domain or CC-BY as marked on each file page).
+
+## Word audio
+
+Full-word pronunciation clips for vocabulary exercises (`scripts/fetch-word-audio.py`). Files are named by normalized word id (e.g. `maz` for *mąż*). Only words with verified Commons recordings and acceptable volume are included.

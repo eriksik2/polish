@@ -1,9 +1,12 @@
+import { getWord } from '../data/wordBank'
 import { getUnit } from '../data/moduleRegistry'
 import type { Exercise } from '../lib/exercises'
 import {
   checkLetterInput,
   getOptionUnits,
+  getOptionWords,
   getSelectedUnitId,
+  getSelectedWordId,
 } from '../lib/exercises'
 import { playUnitAudio, stopUnitAudio } from '../lib/speech/audio'
 import { useSettings } from '../hooks/useSettings'
@@ -13,6 +16,7 @@ import { listenInteractive, scorePronunciation, isSTTSupported } from '../lib/sp
 import { haptic, type FeedbackResult } from '../lib/feedback'
 import { FeedbackOverlay } from './FeedbackOverlay'
 import { AnswerReview } from './AnswerReview'
+import { HighlightedWord } from './HighlightedWord'
 import { SpeechWaveform } from './SpeechWaveform'
 import { buildAnswerReview } from '../lib/explanations'
 
@@ -45,10 +49,14 @@ export function ExerciseCard({ exercise, onAnswer, onContinue }: ExerciseCardPro
   const usesPreviewConfirm =
     exercise.format === 'pick-audio' || exercise.format === 'hear-pick-letter'
 
+  const usesWordOptions =
+    exercise.format === 'unit-pick-word' || exercise.format === 'hear-unit-pick-word'
+
   const usesAudio =
     exercise.format === 'pick-audio' ||
     exercise.format === 'hear-pick-letter' ||
-    exercise.format === 'hear-type-letter'
+    exercise.format === 'hear-type-letter' ||
+    exercise.format === 'hear-unit-pick-word'
 
   const selectedIndex = usesPreviewConfirm ? previewSelected : selected
 
@@ -80,7 +88,7 @@ export function ExerciseCard({ exercise, onAnswer, onContinue }: ExerciseCardPro
 
   useEffect(() => {
     if (!settings?.autoPlayAudio) return
-    if (exercise.format === 'hear-pick-letter' || exercise.format === 'hear-type-letter') {
+    if (exercise.format === 'hear-pick-letter' || exercise.format === 'hear-type-letter' || exercise.format === 'hear-unit-pick-word') {
       const timer = setTimeout(() => playPromptAudio(), 400)
       return () => clearTimeout(timer)
     }
@@ -119,10 +127,14 @@ export function ExerciseCard({ exercise, onAnswer, onContinue }: ExerciseCardPro
   const reviewItems = useMemo(() => {
     if (!submitted || answerCorrect === null) return []
 
+    const isWordFormat = usesWordOptions || exercise.format === 'word-pick-unit'
+
     const selectedUnitId =
       exercise.format === 'hear-type-letter'
         ? resolveTypedUnitId(exercise.moduleId, typed)
-        : getSelectedUnitId(exercise, selectedIndex)
+        : isWordFormat && usesWordOptions
+          ? getSelectedWordId(exercise, selectedIndex)
+          : getSelectedUnitId(exercise, selectedIndex)
 
     const selectedLabel =
       exercise.format === 'pick-english' && selectedIndex !== null
@@ -139,6 +151,9 @@ export function ExerciseCard({ exercise, onAnswer, onContinue }: ExerciseCardPro
       transcript,
       alternatives,
       optionUnitIds: getOptionUnits(exercise),
+      optionWordIds: getOptionWords(exercise),
+      targetWordId: exercise.targetWordId,
+      highlightIndex: exercise.highlightIndex,
       answerCorrect,
     })
   }, [
@@ -180,7 +195,9 @@ export function ExerciseCard({ exercise, onAnswer, onContinue }: ExerciseCardPro
       : `✗ Correct: ${
           exercise.format === 'pick-english'
             ? exercise.correctAnswer
-            : getUnit(exercise.moduleId, exercise.correctAnswer)?.upper ?? exercise.correctAnswer
+            : usesWordOptions
+              ? getWord(exercise.correctAnswer)?.word ?? exercise.correctAnswer
+              : getUnit(exercise.moduleId, exercise.correctAnswer)?.upper ?? exercise.correctAnswer
         }`
     finish(correct, msg)
   }
@@ -256,7 +273,12 @@ export function ExerciseCard({ exercise, onAnswer, onContinue }: ExerciseCardPro
   }
 
   const showLetter =
-    exercise.format !== 'hear-pick-letter' && exercise.format !== 'hear-type-letter'
+    exercise.format !== 'hear-pick-letter' &&
+    exercise.format !== 'hear-type-letter' &&
+    exercise.format !== 'hear-unit-pick-word' &&
+    exercise.format !== 'word-pick-unit'
+
+  const targetWord = exercise.targetWordId ? getWord(exercise.targetWordId) : undefined
 
   const cardShake = submitted && feedbackResult === 'incorrect' ? 'animate-shake' : ''
 
@@ -282,7 +304,9 @@ export function ExerciseCard({ exercise, onAnswer, onContinue }: ExerciseCardPro
           </div>
         )}
 
-        {(exercise.format === 'hear-pick-letter' || exercise.format === 'hear-type-letter') && (
+        {(exercise.format === 'hear-pick-letter' ||
+          exercise.format === 'hear-type-letter' ||
+          exercise.format === 'hear-unit-pick-word') && (
           <div className="flex justify-center">
             <button
               type="button"
@@ -296,7 +320,17 @@ export function ExerciseCard({ exercise, onAnswer, onContinue }: ExerciseCardPro
           </div>
         )}
 
-        {exercise.options && !usesPreviewConfirm && (
+        {exercise.format === 'word-pick-unit' && targetWord && exercise.highlightIndex !== undefined && (
+          <div className="flex flex-col items-center gap-2 py-4">
+            <HighlightedWord
+              word={targetWord.word}
+              highlightIndex={exercise.highlightIndex}
+            />
+            <p className="text-sm text-slate-500">{targetWord.meaning}</p>
+          </div>
+        )}
+
+        {exercise.options && !usesPreviewConfirm && !usesWordOptions && (
           <div className="grid gap-2">
             {exercise.options.map((opt, i) => (
               <button
@@ -315,6 +349,33 @@ export function ExerciseCard({ exercise, onAnswer, onContinue }: ExerciseCardPro
                 }`}
               >
                 <span className="text-xl font-serif">{opt.label}</span>
+              </button>
+            ))}
+          </div>
+        )}
+
+        {exercise.options && usesWordOptions && (
+          <div className="grid gap-2">
+            {exercise.options.map((opt, i) => (
+              <button
+                key={opt.id}
+                type="button"
+                disabled={submitted}
+                onClick={() => handleOptionSelect(i)}
+                className={`rounded-xl border px-4 py-3.5 text-left transition-all active:scale-[0.98] ${
+                  submitted
+                    ? i === exercise.correctIndex
+                      ? 'border-green-500 bg-green-500/20'
+                      : selectedIndex === i
+                        ? 'border-red-500 bg-red-500/20'
+                        : 'border-slate-700 bg-slate-800/50'
+                    : 'border-slate-700 bg-slate-800 hover:border-slate-500'
+                }`}
+              >
+                <span className="text-xl font-serif">{opt.label}</span>
+                {opt.meaning && (
+                  <span className="block text-sm text-slate-500 mt-0.5">{opt.meaning}</span>
+                )}
               </button>
             ))}
           </div>

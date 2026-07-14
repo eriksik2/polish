@@ -4,6 +4,9 @@ export type ExerciseFormat =
   | 'speak-letter'
   | 'hear-pick-letter'
   | 'hear-type-letter'
+  | 'unit-pick-word'
+  | 'hear-unit-pick-word'
+  | 'word-pick-unit'
 
 export const EXERCISE_FORMATS: {
   id: ExerciseFormat
@@ -40,6 +43,24 @@ export const EXERCISE_FORMATS: {
     label: 'Hear → type letter',
     shortLabel: 'E',
     description: 'Hear a letter name → type the letter',
+  },
+  {
+    id: 'unit-pick-word',
+    label: 'Letter → pick word',
+    shortLabel: 'F',
+    description: 'See a letter → pick a Polish word that contains it',
+  },
+  {
+    id: 'hear-unit-pick-word',
+    label: 'Hear letter → pick word',
+    shortLabel: 'G',
+    description: 'Hear a letter sound → pick a word that contains it',
+  },
+  {
+    id: 'word-pick-unit',
+    label: 'Word → pick letter',
+    shortLabel: 'H',
+    description: 'See a highlighted word → pick the matching letter or digraph',
   },
 ]
 
