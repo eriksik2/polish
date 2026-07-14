@@ -8,11 +8,12 @@ import {
 import { playUnitAudio, stopUnitAudio } from '../lib/speech/audio'
 import { useSettings } from '../hooks/useSettings'
 import { useLessonDrawer } from '../context/LessonDrawerContext'
-import { useState, useEffect, useCallback, useMemo } from 'react'
-import { listenOnce, scorePronunciation, isSTTSupported } from '../lib/speech/stt'
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
+import { listenInteractive, scorePronunciation, isSTTSupported } from '../lib/speech/stt'
 import { haptic, type FeedbackResult } from '../lib/feedback'
 import { FeedbackOverlay } from './FeedbackOverlay'
 import { AnswerReview } from './AnswerReview'
+import { SpeechWaveform } from './SpeechWaveform'
 import { buildAnswerReview } from '../lib/explanations'
 
 interface ExerciseCardProps {
@@ -37,16 +38,25 @@ export function ExerciseCard({ exercise, onAnswer, onContinue }: ExerciseCardPro
   const [transcript, setTranscript] = useState<string>()
   const [alternatives, setAlternatives] = useState<string[]>([])
   const [answerCorrect, setAnswerCorrect] = useState<boolean | null>(null)
+  const [waveformLevels, setWaveformLevels] = useState<number[]>([])
+  const [listenStatus, setListenStatus] = useState<'idle' | 'listening' | 'processing'>('idle')
+  const listenAbortRef = useRef<(() => void) | null>(null)
+
+  const usesPreviewConfirm =
+    exercise.format === 'pick-audio' || exercise.format === 'hear-pick-letter'
 
   const usesAudio =
     exercise.format === 'pick-audio' ||
     exercise.format === 'hear-pick-letter' ||
     exercise.format === 'hear-type-letter'
 
-  const selectedIndex = exercise.format === 'pick-audio' ? previewSelected : selected
+  const selectedIndex = usesPreviewConfirm ? previewSelected : selected
 
   useEffect(() => {
-    return () => stopUnitAudio()
+    return () => {
+      stopUnitAudio()
+      listenAbortRef.current?.()
+    }
   }, [exercise.id])
 
   useEffect(() => {
@@ -62,6 +72,10 @@ export function ExerciseCard({ exercise, onAnswer, onContinue }: ExerciseCardPro
     setTranscript(undefined)
     setAlternatives([])
     setAnswerCorrect(null)
+    setWaveformLevels([])
+    setListenStatus('idle')
+    listenAbortRef.current?.()
+    listenAbortRef.current = null
   }, [exercise.id])
 
   useEffect(() => {
@@ -98,7 +112,8 @@ export function ExerciseCard({ exercise, onAnswer, onContinue }: ExerciseCardPro
     setFeedback(message)
     setFeedbackResult(correct ? 'correct' : 'incorrect')
     haptic(correct ? 'success' : 'error')
-    setTimeout(() => setFeedbackResult(null), correct ? 900 : 1100)
+    // Brief overlay only — review panel stays until user taps Continue
+    setTimeout(() => setFeedbackResult(null), correct ? 700 : 900)
   }
 
   const reviewItems = useMemo(() => {
@@ -158,7 +173,7 @@ export function ExerciseCard({ exercise, onAnswer, onContinue }: ExerciseCardPro
     if (submitted) return
     haptic('confirm')
     setSelected(index)
-    if (exercise.format === 'pick-audio') setPreviewSelected(index)
+    if (usesPreviewConfirm) setPreviewSelected(index)
     const correct = index === exercise.correctIndex
     const msg = correct
       ? '✓ Correct!'
@@ -172,10 +187,13 @@ export function ExerciseCard({ exercise, onAnswer, onContinue }: ExerciseCardPro
 
   const handleOptionSelect = (index: number) => {
     if (submitted) return
-    if (exercise.format === 'pick-audio') return
+    if (usesPreviewConfirm) return
     haptic('tap')
     submitChoice(index)
   }
+
+  const getOptionAudioId = (opt: NonNullable<Exercise['options']>[number]) =>
+    opt.audioLetterId ?? opt.letterId ?? opt.unitId
 
   const handleAudioPreview = (index: number, letterId?: string) => {
     if (submitted || !letterId) return
@@ -204,9 +222,17 @@ export function ExerciseCard({ exercise, onAnswer, onContinue }: ExerciseCardPro
     }
     haptic('confirm')
     setListening(true)
-    setFeedback('Listening…')
+    setWaveformLevels([])
+    setFeedback(null)
+
+    const { promise, abort } = listenInteractive({
+      onLevels: setWaveformLevels,
+      onStatus: setListenStatus,
+    })
+    listenAbortRef.current = abort
+
     try {
-      const result = await listenOnce()
+      const result = await promise
       setTranscript(result.transcript)
       setAlternatives(result.alternatives)
       const scored = scorePronunciation(
@@ -219,11 +245,13 @@ export function ExerciseCard({ exercise, onAnswer, onContinue }: ExerciseCardPro
         confidence: scored.score,
         transcript: result.transcript,
       })
-      setListening(false)
     } catch (err) {
       haptic('error')
       setFeedback(err instanceof Error ? err.message : 'Could not hear you. Try again.')
+    } finally {
       setListening(false)
+      setListenStatus('idle')
+      listenAbortRef.current = null
     }
   }
 
@@ -268,7 +296,7 @@ export function ExerciseCard({ exercise, onAnswer, onContinue }: ExerciseCardPro
           </div>
         )}
 
-        {exercise.options && exercise.format !== 'pick-audio' && (
+        {exercise.options && !usesPreviewConfirm && (
           <div className="grid gap-2">
             {exercise.options.map((opt, i) => (
               <button
@@ -292,42 +320,47 @@ export function ExerciseCard({ exercise, onAnswer, onContinue }: ExerciseCardPro
           </div>
         )}
 
-        {exercise.format === 'pick-audio' && exercise.options && (
+        {usesPreviewConfirm && exercise.options && (
           <div className="space-y-3">
             <p className="text-center text-xs text-slate-500">
-              Tap each option to hear it, then confirm your choice
+              {exercise.format === 'hear-pick-letter'
+                ? 'Tap a letter to hear it, then confirm your choice'
+                : 'Tap each option to hear it, then confirm your choice'}
             </p>
             <div className="grid grid-cols-2 gap-3">
-              {exercise.options.map((opt, i) => (
-                <button
-                  key={opt.id}
-                  type="button"
-                  disabled={submitted}
-                  onClick={() => handleAudioPreview(i, opt.audioLetterId)}
-                  className={`flex flex-col items-center gap-2 rounded-xl border px-4 py-5 transition-all active:scale-[0.97] ${
-                    submitted
-                      ? i === exercise.correctIndex
-                        ? 'border-green-500 bg-green-500/20'
-                        : selectedIndex === i
-                          ? 'border-red-500 bg-red-500/20'
-                          : 'border-slate-700 bg-slate-800/50'
-                      : previewSelected === i
-                        ? 'option-selected'
-                        : playingIndex === i
-                          ? 'option-playing'
-                          : 'border-slate-700 bg-slate-800 hover:border-slate-500'
-                  }`}
-                >
-                  <span className="text-2xl">{playingIndex === i ? '🔉' : '🔊'}</span>
-                  <span className="text-sm text-slate-400 font-serif">
-                    {submitted
-                      ? getUnit(exercise.moduleId, opt.audioLetterId ?? '')?.upper
-                      : previewSelected === i
-                        ? 'Selected'
-                        : `Option ${i + 1}`}
-                  </span>
-                </button>
-              ))}
+              {exercise.options.map((opt, i) => {
+                const audioId = getOptionAudioId(opt)
+                return (
+                  <button
+                    key={opt.id}
+                    type="button"
+                    disabled={submitted}
+                    onClick={() => handleAudioPreview(i, audioId)}
+                    className={`flex flex-col items-center gap-2 rounded-xl border px-4 py-5 transition-all active:scale-[0.97] ${
+                      submitted
+                        ? i === exercise.correctIndex
+                          ? 'border-green-500 bg-green-500/20'
+                          : selectedIndex === i
+                            ? 'border-red-500 bg-red-500/20'
+                            : 'border-slate-700 bg-slate-800/50'
+                        : previewSelected === i
+                          ? 'option-selected'
+                          : playingIndex === i
+                            ? 'option-playing'
+                            : 'border-slate-700 bg-slate-800 hover:border-slate-500'
+                    }`}
+                  >
+                    <span className="text-2xl">{playingIndex === i ? '🔉' : '🔊'}</span>
+                    <span className="text-sm text-slate-400 font-serif">
+                      {submitted || exercise.format === 'hear-pick-letter'
+                        ? opt.label
+                        : previewSelected === i
+                          ? 'Selected'
+                          : `Option ${i + 1}`}
+                    </span>
+                  </button>
+                )
+              })}
             </div>
             {!submitted && (
               <button
@@ -343,9 +376,23 @@ export function ExerciseCard({ exercise, onAnswer, onContinue }: ExerciseCardPro
         )}
 
         {exercise.format === 'speak-letter' && (
-          <div className="flex flex-col items-center gap-3">
+          <div className="flex w-full flex-col items-center gap-3">
             <p className="text-center text-sm text-slate-400">
-              Say the letter sound or Polish name
+              Tap the mic and say the letter sound or Polish name
+            </p>
+            <SpeechWaveform
+              levels={waveformLevels}
+              active={listening}
+              status={listenStatus}
+            />
+            <p className="text-center text-xs text-slate-500 min-h-[1.25rem]">
+              {listenStatus === 'listening'
+                ? 'Listening… stop speaking when done'
+                : listenStatus === 'processing'
+                  ? 'Processing…'
+                  : submitted
+                    ? null
+                    : 'Tap to start'}
             </p>
             <button
               type="button"
