@@ -4,7 +4,7 @@ import {
   type PolishLetter,
 } from '../data/moduleRegistry'
 import type { ExerciseFormat } from '../data/modules'
-import { pickUnitOptionsForWord, pickWordOptions } from '../data/wordBank'
+import { pickUnitOptionsForWord, pickWordOptions, pickWordOptionsWithAudio, pickWordWithAudio, buildGraphemeTiles, type GraphemeTile } from '../data/wordBank'
 import { pickSimilarLabels, pickSimilarUnits } from '../lib/similarity'
 import { shuffle } from './scheduler'
 
@@ -21,6 +21,12 @@ export interface Exercise {
   /** Word used in word-matching formats */
   targetWordId?: string
   highlightIndex?: number
+  /** Grapheme tiles for sequence-building formats */
+  sequenceTiles?: GraphemeTile[]
+  /** Correct grapheme order for sequence-building */
+  correctSequence?: string[]
+  /** Graphemes to play in order (hear-sequence-pick-word) */
+  playSequence?: string[]
 }
 
 export interface ExerciseOption {
@@ -62,6 +68,12 @@ export function generateExercise(
       return generateHearUnitPickWord(id, moduleId, letter)
     case 'word-pick-unit':
       return generateWordPickUnit(id, moduleId, letter)
+    case 'hear-word-pick-letter':
+      return generateHearWordPickLetter(id, moduleId, letter)
+    case 'hear-word-build-sequence':
+      return generateHearWordBuildSequence(id, moduleId, letter)
+    case 'hear-sequence-pick-word':
+      return generateHearSequencePickWord(id, moduleId, letter)
     default:
       return null
   }
@@ -264,6 +276,109 @@ function generateWordPickUnit(id: string, moduleId: string, letter: PolishLetter
     highlightIndex: link.index,
     prompt: 'Which letter or digraph is highlighted?',
   }
+}
+
+function generateHearWordPickLetter(id: string, moduleId: string, letter: PolishLetter): Exercise | null {
+  const word = pickWordWithAudio(moduleId, letter.id)
+  if (!word) return null
+
+  const link = word.unitLinks.find((l) => l.unitId === letter.id)
+  if (!link) return null
+
+  const units = pickUnitOptionsForWord(
+    moduleId,
+    word,
+    letter.id,
+    link.index,
+    4,
+    (uid) => getUnit(moduleId, uid),
+  )
+  if (!units) return null
+
+  const options: ExerciseOption[] = shuffle([
+    { id: 'correct', label: units.correct.upper, unitId: units.correct.id },
+    ...units.distractors.map((u, i) => ({
+      id: `d${i}`,
+      label: u.upper,
+      unitId: u.id,
+    })),
+  ])
+  const correctIndex = options.findIndex((o) => o.id === 'correct')
+
+  return {
+    id,
+    moduleId,
+    letterId: letter.id,
+    format: 'hear-word-pick-letter',
+    letter,
+    options,
+    correctAnswer: letter.id,
+    correctIndex,
+    targetWordId: word.id,
+    highlightIndex: link.index,
+    prompt: `Listen to the word — which letter or digraph is “${letter.upper}”?`,
+  }
+}
+
+function generateHearWordBuildSequence(id: string, moduleId: string, letter: PolishLetter): Exercise | null {
+  const word = pickWordWithAudio(moduleId, letter.id)
+  if (!word) return null
+
+  const minPool = Math.max(8, word.graphemes.length + 3)
+  const { tiles, correctSequence } = buildGraphemeTiles(word, moduleId, minPool)
+
+  return {
+    id,
+    moduleId,
+    letterId: letter.id,
+    format: 'hear-word-build-sequence',
+    letter,
+    correctAnswer: correctSequence.join('|'),
+    targetWordId: word.id,
+    sequenceTiles: tiles,
+    correctSequence,
+    prompt: 'Listen to the word — tap graphemes in order to spell it',
+  }
+}
+
+function generateHearSequencePickWord(id: string, moduleId: string, letter: PolishLetter): Exercise | null {
+  const picked = pickWordOptionsWithAudio(moduleId, letter.id, 4)
+  if (!picked) return null
+
+  const options: ExerciseOption[] = shuffle([
+    {
+      id: 'correct',
+      label: picked.correct.word,
+      wordId: picked.correct.id,
+      meaning: picked.correct.meaning,
+    },
+    ...picked.distractors.map((w, i) => ({
+      id: `d${i}`,
+      label: w.word,
+      wordId: w.id,
+      meaning: w.meaning,
+    })),
+  ])
+  const correctIndex = options.findIndex((o) => o.id === 'correct')
+
+  return {
+    id,
+    moduleId,
+    letterId: letter.id,
+    format: 'hear-sequence-pick-word',
+    letter,
+    options,
+    correctAnswer: picked.correct.id,
+    correctIndex,
+    targetWordId: picked.correct.id,
+    playSequence: [...picked.correct.graphemes],
+    prompt: 'Listen to each sound in order — which word is it?',
+  }
+}
+
+export function sequencesMatch(a: string[], b: string[]): boolean {
+  if (a.length !== b.length) return false
+  return a.every((g, i) => g === b[i])
 }
 
 export function normalizeLetterInput(input: string): string {

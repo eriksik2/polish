@@ -7,6 +7,15 @@ export type ExerciseFormat =
   | 'unit-pick-word'
   | 'hear-unit-pick-word'
   | 'word-pick-unit'
+  | 'hear-word-pick-letter'
+  | 'hear-word-build-sequence'
+  | 'hear-sequence-pick-word'
+
+/** Formats turned off for new users — enable in Settings */
+export const FORMATS_DISABLED_BY_DEFAULT = new Set<ExerciseFormat>([
+  'unit-pick-word',
+  'word-pick-unit',
+])
 
 export const EXERCISE_FORMATS: {
   id: ExerciseFormat
@@ -48,7 +57,7 @@ export const EXERCISE_FORMATS: {
     id: 'unit-pick-word',
     label: 'Letter → pick word',
     shortLabel: 'F',
-    description: 'See a letter → pick a Polish word that contains it',
+    description: 'See a letter → pick a Polish word that contains it (disabled by default)',
   },
   {
     id: 'hear-unit-pick-word',
@@ -61,6 +70,24 @@ export const EXERCISE_FORMATS: {
     label: 'Word → pick letter',
     shortLabel: 'H',
     description: 'See a highlighted word → pick the matching letter (disabled by default — letter is already shown)',
+  },
+  {
+    id: 'hear-word-pick-letter',
+    label: 'Hear word → pick letter',
+    shortLabel: 'I',
+    description: 'Hear a Polish word → pick which letter or digraph from this lesson it contains',
+  },
+  {
+    id: 'hear-word-build-sequence',
+    label: 'Hear word → build spelling',
+    shortLabel: 'J',
+    description: 'Hear a word → tap graphemes in order to build its letter/digraph sequence',
+  },
+  {
+    id: 'hear-sequence-pick-word',
+    label: 'Hear sounds → pick word',
+    shortLabel: 'K',
+    description: 'Hear graphemes played one after another → pick the written word',
   },
 ]
 

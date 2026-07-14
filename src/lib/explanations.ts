@@ -74,6 +74,8 @@ export function buildAnswerReview(params: {
   targetWordId?: string
   highlightIndex?: number
   answerCorrect?: boolean
+  builtSequence?: string[]
+  correctSequence?: string[]
 }): ReviewItem[] {
   const correct = getUnit(params.moduleId, params.correctUnitId)
   if (!correct) return []
@@ -173,6 +175,104 @@ export function buildAnswerReview(params: {
           body: `The highlighted sound in "${targetWord.word}" is ${correct.upper}, not ${unit.upper}.`,
         })
       }
+    }
+    return items
+  }
+
+  if (params.format === 'hear-word-pick-letter' && targetWord) {
+    items.push({
+      unitId: correct.id,
+      label: correct.upper,
+      status: 'correct',
+      heading: `✓ ${correct.upper} is in "${targetWord.word}"`,
+      body: `"${targetWord.word}" (${targetWord.meaning}) contains ${correct.upper} (${correct.ipa}). Graphemes: ${targetWord.graphemes.join(' · ')}.`,
+    })
+
+    const selectedId = params.selectedUnitId
+    if (selectedId && selectedId !== correct.id) {
+      const picked = getUnit(params.moduleId, selectedId)
+      if (picked) {
+        items.push({
+          unitId: picked.id,
+          label: picked.upper,
+          status: 'your-answer',
+          heading: `Your choice: ${picked.upper}`,
+          body: `You heard "${targetWord.word}" — the lesson grapheme is ${correct.upper}, not ${picked.upper}. ${compareUnits(correct, picked)}`,
+        })
+      }
+    }
+
+    for (const opt of params.optionUnitIds ?? []) {
+      if (opt.unitId === correct.id || opt.unitId === selectedId) continue
+      const unit = getUnit(params.moduleId, opt.unitId)
+      if (unit) {
+        items.push({
+          unitId: unit.id,
+          label: unit.upper,
+          status: 'wrong-option',
+          heading: `${unit.upper} — why not`,
+          body: `"${targetWord.word}" uses ${correct.upper} here, not ${unit.upper}.`,
+        })
+      }
+    }
+    return items
+  }
+
+  if (params.format === 'hear-word-build-sequence' && targetWord && params.correctSequence) {
+    const seq = params.correctSequence.join(' · ')
+    items.push({
+      label: targetWord.word,
+      status: 'correct',
+      heading: `✓ ${targetWord.word} (${targetWord.meaning})`,
+      body: `Grapheme sequence: ${seq}`,
+    })
+    if (params.builtSequence && !params.answerCorrect) {
+      items.push({
+        label: params.builtSequence.join(''),
+        status: 'your-answer',
+        heading: `Your sequence: ${params.builtSequence.join(' · ')}`,
+        body: `Correct order: ${seq}.`,
+      })
+    }
+    return items
+  }
+
+  if (params.format === 'hear-sequence-pick-word') {
+    const correctWordId = params.targetWordId
+    const correctW = correctWordId ? getWord(correctWordId) : undefined
+    if (correctW) {
+      items.push({
+        label: correctW.word,
+        status: 'correct',
+        heading: `✓ ${correctW.word} (${correctW.meaning})`,
+        body: `The sounds spell: ${correctW.graphemes.join(' · ')} → "${correctW.word}".`,
+      })
+    }
+
+    const selectedWordId = params.selectedUnitId
+    if (selectedWordId && selectedWordId !== correctWordId) {
+      const picked = getWord(selectedWordId)
+      items.push({
+        label: picked?.word ?? selectedWordId,
+        status: 'your-answer',
+        heading: `Your choice: ${picked?.word ?? selectedWordId}`,
+        body: picked
+          ? `"${picked.word}" (${picked.meaning}) has graphemes ${picked.graphemes.join(' · ')} — different from what you heard.`
+          : 'Not the expected word.',
+      })
+    }
+
+    for (const opt of params.optionWordIds ?? []) {
+      if (opt.wordId === correctWordId || opt.wordId === selectedWordId) continue
+      const w = getWord(opt.wordId)
+      items.push({
+        label: opt.label,
+        status: 'wrong-option',
+        heading: `${opt.label} — why not`,
+        body: w
+          ? `"${w.word}" (${w.meaning}): ${w.graphemes.join(' · ')}`
+          : 'Different grapheme sequence.',
+      })
     }
     return items
   }

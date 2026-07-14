@@ -7,8 +7,9 @@ import {
   getOptionWords,
   getSelectedUnitId,
   getSelectedWordId,
+  sequencesMatch,
 } from '../lib/exercises'
-import { playUnitAudio, stopUnitAudio } from '../lib/speech/audio'
+import { playGraphemeSequence, playUnitAudio, playWordAudio, stopUnitAudio } from '../lib/speech/audio'
 import { useSettings } from '../hooks/useSettings'
 import { useLessonDrawer } from '../context/LessonDrawerContext'
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
@@ -44,20 +45,32 @@ export function ExerciseCard({ exercise, onAnswer, onContinue }: ExerciseCardPro
   const [answerCorrect, setAnswerCorrect] = useState<boolean | null>(null)
   const [waveformLevels, setWaveformLevels] = useState<number[]>([])
   const [listenStatus, setListenStatus] = useState<'idle' | 'listening' | 'processing'>('idle')
+  const [builtSequence, setBuiltSequence] = useState<string[]>([])
+  const [builtTileIds, setBuiltTileIds] = useState<string[]>([])
+  const [sequencePlaying, setSequencePlaying] = useState(false)
+  const [sequenceStep, setSequenceStep] = useState<number | null>(null)
   const listenAbortRef = useRef<(() => void) | null>(null)
+  const sequenceAbortRef = useRef<(() => void) | null>(null)
   const continueRef = useRef<HTMLDivElement>(null)
 
   const usesPreviewConfirm =
     exercise.format === 'pick-audio' || exercise.format === 'hear-pick-letter'
 
   const usesWordOptions =
-    exercise.format === 'unit-pick-word' || exercise.format === 'hear-unit-pick-word'
+    exercise.format === 'unit-pick-word' ||
+    exercise.format === 'hear-unit-pick-word' ||
+    exercise.format === 'hear-sequence-pick-word'
+
+  const usesSequenceBuild = exercise.format === 'hear-word-build-sequence'
 
   const usesAudio =
     exercise.format === 'pick-audio' ||
     exercise.format === 'hear-pick-letter' ||
     exercise.format === 'hear-type-letter' ||
-    exercise.format === 'hear-unit-pick-word'
+    exercise.format === 'hear-unit-pick-word' ||
+    exercise.format === 'hear-word-pick-letter' ||
+    exercise.format === 'hear-word-build-sequence' ||
+    exercise.format === 'hear-sequence-pick-word'
 
   const selectedIndex = usesPreviewConfirm ? previewSelected : selected
 
@@ -65,6 +78,7 @@ export function ExerciseCard({ exercise, onAnswer, onContinue }: ExerciseCardPro
     return () => {
       stopUnitAudio()
       listenAbortRef.current?.()
+      sequenceAbortRef.current?.()
     }
   }, [exercise.id])
 
@@ -83,13 +97,26 @@ export function ExerciseCard({ exercise, onAnswer, onContinue }: ExerciseCardPro
     setAnswerCorrect(null)
     setWaveformLevels([])
     setListenStatus('idle')
+    setBuiltSequence([])
+    setBuiltTileIds([])
+    setSequencePlaying(false)
+    setSequenceStep(null)
     listenAbortRef.current?.()
     listenAbortRef.current = null
+    sequenceAbortRef.current?.()
+    sequenceAbortRef.current = null
   }, [exercise.id])
 
   useEffect(() => {
     if (!settings?.autoPlayAudio) return
-    if (exercise.format === 'hear-pick-letter' || exercise.format === 'hear-type-letter' || exercise.format === 'hear-unit-pick-word') {
+    if (
+      exercise.format === 'hear-pick-letter' ||
+      exercise.format === 'hear-type-letter' ||
+      exercise.format === 'hear-unit-pick-word' ||
+      exercise.format === 'hear-word-pick-letter' ||
+      exercise.format === 'hear-word-build-sequence' ||
+      exercise.format === 'hear-sequence-pick-word'
+    ) {
       const timer = setTimeout(() => playPromptAudio(), 400)
       return () => clearTimeout(timer)
     }
@@ -122,7 +149,49 @@ export function ExerciseCard({ exercise, onAnswer, onContinue }: ExerciseCardPro
   const playPromptAudio = () => {
     setPlayed(true)
     haptic('tap')
+    if (exercise.format === 'hear-sequence-pick-word' && exercise.playSequence) {
+      playGraphemeSequenceAudio()
+      return
+    }
+    if (
+      (exercise.format === 'hear-word-pick-letter' ||
+        exercise.format === 'hear-word-build-sequence') &&
+      exercise.targetWordId
+    ) {
+      setPlayingIndex(-1)
+      const ok = playWordAudio(exercise.targetWordId, {
+        onEnd: () => setPlayingIndex(null),
+        onError: () => {
+          setPlayingIndex(null)
+          setFeedback('Word audio unavailable.')
+        },
+      })
+      if (!ok) setFeedback('Word audio unavailable.')
+      return
+    }
     playLetter(exercise.letterId)
+  }
+
+  const playGraphemeSequenceAudio = () => {
+    if (!exercise.playSequence?.length) return
+    sequenceAbortRef.current?.()
+    setSequencePlaying(true)
+    setSequenceStep(null)
+    setPlayed(true)
+    haptic('tap')
+    sequenceAbortRef.current = playGraphemeSequence(exercise.playSequence, {
+      onStep: (i) => setSequenceStep(i),
+      onEnd: () => {
+        setSequencePlaying(false)
+        setSequenceStep(null)
+        sequenceAbortRef.current = null
+      },
+      onError: () => {
+        setSequencePlaying(false)
+        setSequenceStep(null)
+        setFeedback('Audio unavailable.')
+      },
+    })
   }
 
   const showFeedback = (correct: boolean, message: string) => {
@@ -136,7 +205,10 @@ export function ExerciseCard({ exercise, onAnswer, onContinue }: ExerciseCardPro
   const reviewItems = useMemo(() => {
     if (!submitted || answerCorrect === null) return []
 
-    const isWordFormat = usesWordOptions || exercise.format === 'word-pick-unit'
+    const isWordFormat =
+      usesWordOptions ||
+      exercise.format === 'word-pick-unit' ||
+      usesSequenceBuild
 
     const selectedUnitId =
       exercise.format === 'hear-type-letter'
@@ -164,6 +236,8 @@ export function ExerciseCard({ exercise, onAnswer, onContinue }: ExerciseCardPro
       targetWordId: exercise.targetWordId,
       highlightIndex: exercise.highlightIndex,
       answerCorrect,
+      builtSequence: usesSequenceBuild ? builtSequence : undefined,
+      correctSequence: exercise.correctSequence,
     })
   }, [
     submitted,
@@ -173,6 +247,8 @@ export function ExerciseCard({ exercise, onAnswer, onContinue }: ExerciseCardPro
     typed,
     transcript,
     alternatives,
+    builtSequence,
+    usesSequenceBuild,
   ])
 
   function resolveTypedUnitId(moduleId: string, input: string): string | undefined {
@@ -233,6 +309,40 @@ export function ExerciseCard({ exercise, onAnswer, onContinue }: ExerciseCardPro
     submitChoice(previewSelected)
   }
 
+  const handleSequenceTile = (tileId: string, grapheme: string) => {
+    if (submitted || builtTileIds.includes(tileId)) return
+    haptic('tap')
+    setBuiltTileIds((prev) => [...prev, tileId])
+    setBuiltSequence((prev) => [...prev, grapheme])
+  }
+
+  const handleSequenceUndo = () => {
+    if (submitted || builtSequence.length === 0) return
+    haptic('tap')
+    setBuiltTileIds((prev) => prev.slice(0, -1))
+    setBuiltSequence((prev) => prev.slice(0, -1))
+  }
+
+  const handleSequenceClear = () => {
+    if (submitted) return
+    haptic('tap')
+    setBuiltSequence([])
+    setBuiltTileIds([])
+  }
+
+  const handleSequenceSubmit = () => {
+    if (submitted || !exercise.correctSequence) return
+    haptic('confirm')
+    const correct = sequencesMatch(builtSequence, exercise.correctSequence)
+    const word = exercise.targetWordId ? getWord(exercise.targetWordId) : undefined
+    finish(
+      correct,
+      correct
+        ? '✓ Correct!'
+        : `✗ Correct: ${word?.word ?? exercise.correctSequence.join('')}`,
+    )
+  }
+
   const handleTypeSubmit = () => {
     if (submitted) return
     haptic('confirm')
@@ -285,7 +395,12 @@ export function ExerciseCard({ exercise, onAnswer, onContinue }: ExerciseCardPro
     exercise.format !== 'hear-pick-letter' &&
     exercise.format !== 'hear-type-letter' &&
     exercise.format !== 'hear-unit-pick-word' &&
-    exercise.format !== 'word-pick-unit'
+    exercise.format !== 'word-pick-unit' &&
+    exercise.format !== 'hear-word-pick-letter' &&
+    exercise.format !== 'hear-word-build-sequence' &&
+    exercise.format !== 'hear-sequence-pick-word'
+
+  const usedTileSet = new Set(builtTileIds)
 
   const targetWord = exercise.targetWordId ? getWord(exercise.targetWordId) : undefined
 
@@ -315,17 +430,31 @@ export function ExerciseCard({ exercise, onAnswer, onContinue }: ExerciseCardPro
 
         {(exercise.format === 'hear-pick-letter' ||
           exercise.format === 'hear-type-letter' ||
-          exercise.format === 'hear-unit-pick-word') && (
-          <div className="flex justify-center">
+          exercise.format === 'hear-unit-pick-word' ||
+          exercise.format === 'hear-word-pick-letter' ||
+          exercise.format === 'hear-word-build-sequence' ||
+          exercise.format === 'hear-sequence-pick-word') && (
+          <div className="flex flex-col items-center gap-2">
             <button
               type="button"
               onClick={playPromptAudio}
+              disabled={sequencePlaying}
               className={`flex items-center gap-2 rounded-2xl px-6 py-4 text-lg font-medium active:scale-95 transition-transform ${
-                playingIndex !== null ? 'bg-amber-600' : 'bg-red-600'
+                playingIndex !== null || sequencePlaying ? 'bg-amber-600' : 'bg-red-600'
               }`}
             >
-              🔊 {played ? 'Play again' : 'Play sound'}
+              🔊{' '}
+              {sequencePlaying
+                ? `Playing ${(sequenceStep ?? 0) + 1}/${exercise.playSequence?.length ?? '?'}…`
+                : played
+                  ? 'Play again'
+                  : exercise.format === 'hear-sequence-pick-word'
+                    ? 'Play sounds'
+                    : 'Play word'}
             </button>
+            {exercise.format === 'hear-word-pick-letter' && targetWord && (
+              <p className="text-xs text-slate-500">{targetWord.meaning}</p>
+            )}
           </div>
         )}
 
@@ -477,6 +606,76 @@ export function ExerciseCard({ exercise, onAnswer, onContinue }: ExerciseCardPro
           </div>
         )}
 
+        {usesSequenceBuild && exercise.sequenceTiles && (
+          <div className="space-y-3">
+            <div className="min-h-[3rem] rounded-xl border border-slate-700 bg-slate-800/50 px-3 py-2">
+              <p className="text-xs text-slate-500 mb-1">Your sequence</p>
+              <p className="text-2xl font-serif tracking-wide min-h-[1.75rem]">
+                {builtSequence.length > 0 ? (
+                  builtSequence.map((g, i) => (
+                    <span key={`${g}-${i}`} className="text-red-300">
+                      {g}
+                    </span>
+                  ))
+                ) : (
+                  <span className="text-slate-600 text-base">Tap graphemes below…</span>
+                )}
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-2 justify-center">
+              {exercise.sequenceTiles.map((tile) => {
+                const used = usedTileSet.has(tile.id)
+                return (
+                  <button
+                    key={tile.id}
+                    type="button"
+                    disabled={submitted || used}
+                    onClick={() => handleSequenceTile(tile.id, tile.grapheme)}
+                    className={`rounded-xl border px-4 py-3 text-xl font-serif transition-all active:scale-95 ${
+                      used
+                        ? 'border-slate-800 bg-slate-900/40 text-slate-600'
+                        : 'border-slate-600 bg-slate-800 hover:border-red-500/50'
+                    }`}
+                  >
+                    {tile.grapheme}
+                  </button>
+                )
+              })}
+            </div>
+            {!submitted && (
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  disabled={builtSequence.length === 0}
+                  onClick={handleSequenceUndo}
+                  className="flex-1 rounded-xl border border-slate-700 py-3 text-sm text-slate-300 disabled:opacity-40"
+                >
+                  Undo
+                </button>
+                <button
+                  type="button"
+                  disabled={builtSequence.length === 0}
+                  onClick={handleSequenceClear}
+                  className="flex-1 rounded-xl border border-slate-700 py-3 text-sm text-slate-300 disabled:opacity-40"
+                >
+                  Clear
+                </button>
+                <button
+                  type="button"
+                  disabled={
+                    !exercise.correctSequence ||
+                    builtSequence.length !== exercise.correctSequence.length
+                  }
+                  onClick={handleSequenceSubmit}
+                  className="flex-[2] rounded-xl bg-red-600 py-3 font-semibold disabled:opacity-40 active:scale-[0.98]"
+                >
+                  Check
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+
         {exercise.format === 'hear-type-letter' && (
           <div className="space-y-3">
             <input
@@ -505,15 +704,12 @@ export function ExerciseCard({ exercise, onAnswer, onContinue }: ExerciseCardPro
         )}
 
         {submitted && (
-          <div
-            ref={continueRef}
-            className="sticky bottom-16 z-10 -mx-4 mt-2 border-t border-slate-800/80 bg-slate-900/95 px-4 pt-3 pb-1 backdrop-blur md:bottom-4"
-          >
+          <div ref={continueRef} className="mt-4 space-y-3 border-t border-slate-800 pt-4">
             <AnswerReview items={reviewItems} />
             <button
               type="button"
               onClick={onContinue}
-              className="mt-3 w-full rounded-xl bg-slate-700 py-3 font-semibold text-slate-100 active:scale-[0.98] transition-transform"
+              className="w-full rounded-xl bg-slate-700 py-3 font-semibold text-slate-100 active:scale-[0.98] transition-transform"
             >
               Continue →
             </button>

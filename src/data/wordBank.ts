@@ -2,11 +2,13 @@ import { POLISH_ALPHABET } from '../data/alphabet'
 import { POLISH_DIGRAPHS } from '../data/digraphs'
 import type { PolishLetter } from '../data/alphabet'
 import { getUnit } from '../data/moduleRegistry'
-import { pickSimilarUnits, scoreWordAsDistractor } from '../lib/similarity'
+import { hasWordRecording } from '../lib/speech/audio'
+import { pickSimilarUnits, scoreWordAsDistractor, similarUnitIds } from '../lib/similarity'
 import {
   findHighlightIndex,
   graphemeAtIndex,
   highlightToUnitId,
+  POLISH_DIGRAPH_IDS,
   tokenizeGraphemes,
   wordContainsUnit,
 } from '../lib/graphemes'
@@ -141,6 +143,138 @@ export function getWordsForUnit(moduleId: string, unitId: string): WordEntry[] {
   return WORD_BANK.filter(
     (w) => w.modules.includes(moduleId as 'alphabet' | 'digraphs') && w.unitLinks.some((l) => l.unitId === unitId),
   )
+}
+
+export function getWordsWithAudioForUnit(moduleId: string, unitId: string): WordEntry[] {
+  return getWordsForUnit(moduleId, unitId).filter((w) => hasWordRecording(w.id))
+}
+
+export function getWordsWithAudio(moduleId: string): WordEntry[] {
+  return WORD_BANK.filter(
+    (w) => w.modules.includes(moduleId as 'alphabet' | 'digraphs') && hasWordRecording(w.id),
+  )
+}
+
+function moduleForGrapheme(g: string): 'alphabet' | 'digraphs' {
+  return (POLISH_DIGRAPH_IDS as Set<string>).has(g) ? 'digraphs' : 'alphabet'
+}
+
+function lookupGraphemeUnit(g: string): PolishLetter | undefined {
+  return getUnit(moduleForGrapheme(g), g)
+}
+
+export interface GraphemeTile {
+  id: string
+  grapheme: string
+}
+
+/** Tiles for building a word's grapheme sequence, with distractors to reach minPool size */
+export function buildGraphemeTiles(
+  word: WordEntry,
+  moduleId: string,
+  minPool = 8,
+): { tiles: GraphemeTile[]; correctSequence: string[] } {
+  const correctSequence = [...word.graphemes]
+  const tiles: GraphemeTile[] = []
+  const usedCount = new Map<string, number>()
+
+  for (const g of correctSequence) {
+    const n = usedCount.get(g) ?? 0
+    tiles.push({ id: `${g}-${n}`, grapheme: g })
+    usedCount.set(g, n + 1)
+  }
+
+  const inWord = new Set(correctSequence)
+  const distractorCandidates = new Set<string>()
+
+  for (const g of correctSequence) {
+    const unit = lookupGraphemeUnit(g)
+    if (!unit) continue
+    for (const id of similarUnitIds(moduleId, unit)) {
+      if (!inWord.has(id)) distractorCandidates.add(id)
+    }
+  }
+
+  for (const u of [...POLISH_ALPHABET, ...POLISH_DIGRAPHS]) {
+    if (!inWord.has(u.id)) distractorCandidates.add(u.id)
+  }
+
+  const shuffledDistractors = [...distractorCandidates].sort(() => Math.random() - 0.5)
+  let di = 0
+  while (tiles.length < minPool && di < shuffledDistractors.length) {
+    const g = shuffledDistractors[di++]
+    tiles.push({ id: `x-${g}-${di}`, grapheme: g })
+  }
+
+  return {
+    tiles: tiles.sort(() => Math.random() - 0.5),
+    correctSequence,
+  }
+}
+
+/** Pick words with audio: 1 correct + similar distractors (also with audio) */
+export function pickWordOptionsWithAudio(
+  moduleId: string,
+  unitId: string,
+  count: number,
+): { correct: WordEntry; distractors: WordEntry[] } | null {
+  const candidates = getWordsWithAudioForUnit(moduleId, unitId)
+  if (candidates.length === 0) return null
+
+  const correct = candidates[Math.floor(Math.random() * candidates.length)]
+  const pool = getWordsWithAudio(moduleId).filter(
+    (w) => w.id !== correct.id && !wordContainsUnit(w.word, unitId),
+  )
+  const needed = count - 1
+  if (pool.length < needed) return null
+
+  const targetUnit = getUnit(moduleId, unitId)
+  if (!targetUnit) return null
+
+  const lookup = (id: string) => getUnit(moduleId, id)
+  const ranked = pool
+    .map((w) => ({
+      word: w,
+      score: scoreWordAsDistractor(w.graphemes, targetUnit, moduleId, lookup),
+    }))
+    .sort((a, b) => b.score - a.score)
+
+  const picked: WordEntry[] = []
+  const used = new Set<string>()
+
+  for (const { word, score } of ranked) {
+    if (picked.length >= needed) break
+    if (score < 35 && picked.length >= Math.min(2, needed)) continue
+    if (!used.has(word.id)) {
+      picked.push(word)
+      used.add(word.id)
+    }
+  }
+
+  for (const { word } of ranked) {
+    if (picked.length >= needed) break
+    if (!used.has(word.id)) {
+      picked.push(word)
+      used.add(word.id)
+    }
+  }
+
+  if (picked.length < needed) return null
+  return { correct, distractors: picked.slice(0, needed) }
+}
+
+/** Pick a random word with audio for a unit */
+export function pickWordWithAudio(
+  moduleId: string,
+  unitId: string,
+): WordEntry | null {
+  const candidates = getWordsWithAudioForUnit(moduleId, unitId)
+  if (candidates.length === 0) return null
+  return candidates[Math.floor(Math.random() * candidates.length)]
+}
+
+export function graphemeModuleId(grapheme: string): 'alphabet' | 'digraphs' {
+  return moduleForGrapheme(grapheme)
 }
 
 export function getWordsWithoutUnit(moduleId: string, unitId: string): WordEntry[] {

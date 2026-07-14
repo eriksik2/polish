@@ -1,6 +1,6 @@
 import Dexie, { type EntityTable } from 'dexie'
 import type { ExerciseFormat } from '../data/modules'
-import { EXERCISE_FORMATS } from '../data/modules'
+import { EXERCISE_FORMATS, FORMATS_DISABLED_BY_DEFAULT } from '../data/modules'
 
 export type { ExerciseFormat }
 
@@ -38,7 +38,7 @@ export interface AppSettings {
 }
 
 const DEFAULT_ENABLED: Record<ExerciseFormat, boolean> = Object.fromEntries(
-  EXERCISE_FORMATS.map((f) => [f.id, f.id !== 'word-pick-unit']),
+  EXERCISE_FORMATS.map((f) => [f.id, !FORMATS_DISABLED_BY_DEFAULT.has(f.id)]),
 ) as Record<ExerciseFormat, boolean>
 
 const DEFAULT_SETTINGS: AppSettings = {
@@ -71,13 +71,16 @@ export async function getSettings(): Promise<AppSettings> {
     let changed = false
     for (const f of EXERCISE_FORMATS) {
       if (existing.enabledFormats[f.id] === undefined) {
-        existing.enabledFormats[f.id] = f.id !== 'word-pick-unit'
+        existing.enabledFormats[f.id] = !FORMATS_DISABLED_BY_DEFAULT.has(f.id)
         changed = true
       }
     }
-    // Word→letter is trivial when the grapheme is already highlighted
     if (existing.enabledFormats['word-pick-unit']) {
       existing.enabledFormats['word-pick-unit'] = false
+      changed = true
+    }
+    if (existing.enabledFormats['unit-pick-word']) {
+      existing.enabledFormats['unit-pick-word'] = false
       changed = true
     }
     if (changed) await db.settings.put(existing)

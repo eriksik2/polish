@@ -1,6 +1,7 @@
 import letterManifest from '../../data/letter-audio-manifest.json'
 import digraphManifest from '../../data/digraph-audio-manifest.json'
 import wordManifest from '../../data/word-audio-manifest.json'
+import { POLISH_DIGRAPH_IDS } from '../graphemes'
 
 const BASE = import.meta.env.BASE_URL
 
@@ -98,6 +99,50 @@ export function playWordAudio(
   }
   void audio.play().catch(() => options?.onError?.())
   return true
+}
+
+/** Play graphemes one after another; returns abort function */
+export function playGraphemeSequence(
+  graphemes: string[],
+  options?: {
+    gapMs?: number
+    onStep?: (index: number) => void
+    onEnd?: () => void
+    onError?: () => void
+  },
+): () => void {
+  const gapMs = options?.gapMs ?? 350
+  let cancelled = false
+  let index = 0
+
+  const abort = () => {
+    cancelled = true
+    stopUnitAudio()
+  }
+
+  const playNext = () => {
+    if (cancelled) return
+    if (index >= graphemes.length) {
+      options?.onEnd?.()
+      return
+    }
+    const g = graphemes[index]
+    const step = index
+    index++
+    options?.onStep?.(step)
+    const moduleId = (POLISH_DIGRAPH_IDS as Set<string>).has(g) ? 'digraphs' : 'alphabet'
+    const ok = playUnitAudio(moduleId, g, {
+      onEnd: () => {
+        if (cancelled) return
+        setTimeout(playNext, gapMs)
+      },
+      onError: () => options?.onError?.(),
+    })
+    if (!ok) options?.onError?.()
+  }
+
+  playNext()
+  return abort
 }
 
 /** @deprecated use playUnitAudio */
