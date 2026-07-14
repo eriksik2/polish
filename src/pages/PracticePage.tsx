@@ -91,8 +91,6 @@ export function PracticePage() {
       done: s.done + 1,
       correct: s.correct + (correct ? 1 : 0),
     }))
-
-    setTimeout(() => nextExercise(), correct ? 1200 : 2000)
   }
 
   const handleNext = () => {
@@ -153,6 +151,7 @@ export function PracticePage() {
             key={exercise.id}
             exercise={exercise}
             onAnswer={handleAnswer}
+            onContinue={handleNext}
           />
           <button
             type="button"
