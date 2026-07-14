@@ -21,6 +21,7 @@ import { HighlightedWord } from './HighlightedWord'
 import { SpeechWaveform } from './SpeechWaveform'
 import { buildAnswerReview } from '../lib/explanations'
 import { playCorrectAnswerAudio } from '../lib/answerAudio'
+import { scrollElementIntoViewRepeated } from '../lib/scrollIntoView'
 
 interface ExerciseCardProps {
   exercise: Exercise
@@ -146,14 +147,6 @@ export function ExerciseCard({
     }
   }, [exercise.id, settings?.autoPlayAudio])
 
-  useEffect(() => {
-    if (!submitted || quickMode) return
-    const timer = setTimeout(() => {
-      continueRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' })
-    }, 200)
-    return () => clearTimeout(timer)
-  }, [submitted])
-
   const playLetter = useCallback(
     (unitId: string, index?: number) => {
       setPlayingIndex(index ?? null)
@@ -274,6 +267,11 @@ export function ExerciseCard({
     builtSequence,
     usesSequenceBuild,
   ])
+
+  useEffect(() => {
+    if (!submitted || quickMode) return
+    return scrollElementIntoViewRepeated(continueRef.current)
+  }, [submitted, quickMode, reviewItems.length])
 
   function resolveTypedUnitId(moduleId: string, input: string): string | undefined {
     const n = input.trim().toLowerCase()
@@ -752,7 +750,10 @@ export function ExerciseCard({
         )}
 
         {submitted && !quickMode && (
-          <div ref={continueRef} className="mt-4 space-y-3 border-t border-slate-800 pt-4">
+          <div
+            ref={continueRef}
+            className="mt-4 space-y-3 border-t border-slate-800 pt-4 pb-[calc(0.5rem+env(safe-area-inset-bottom,0px))]"
+          >
             <AnswerReview items={reviewItems} moduleId={exercise.moduleId} />
             <button
               type="button"
