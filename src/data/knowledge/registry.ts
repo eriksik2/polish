@@ -112,12 +112,14 @@ function buildGraph(): { nodes: Map<string, KnowledgeNode>; links: KnowledgeLink
     registerVocabNode(nodes, entry)
   }
 
-  // Grapheme composition for words & phrases (no reverse part_of — graphemes are not parents)
+  // Grapheme composition for words & case forms only (phrases decompose into words, not spellings)
   for (const entry of VOCABULARY) {
     const node = nodes.get(entry.id)!
-    for (let i = 0; i < node.graphemeIds!.length; i++) {
-      const g = node.graphemeIds![i]
-      addLink({ from: entry.id, to: g, kind: 'contains', index: i })
+    if (entry.kind !== 'phrase') {
+      for (let i = 0; i < node.graphemeIds!.length; i++) {
+        const g = node.graphemeIds![i]
+        addLink({ from: entry.id, to: g, kind: 'contains', index: i })
+      }
     }
     if (entry.wordIds) {
       for (let i = 0; i < entry.wordIds.length; i++) {
@@ -156,7 +158,6 @@ function buildGraph(): { nodes: Map<string, KnowledgeNode>; links: KnowledgeLink
           index,
           highlight: ex.highlight,
         })
-        addLink({ from: wordId, to: unit.id, kind: 'part_of', index })
       }
     }
   }
@@ -177,7 +178,6 @@ function buildGraph(): { nodes: Map<string, KnowledgeNode>; links: KnowledgeLink
       graphemeIds: tokenizeGraphemes(form.surface),
     })
     addLink({ from: form.id, to: form.lemmaId, kind: 'inflection_of' })
-    addLink({ from: form.lemmaId, to: form.id, kind: 'part_of' })
     for (let i = 0; i < tokenizeGraphemes(form.surface).length; i++) {
       const g = tokenizeGraphemes(form.surface)[i]
       addLink({ from: form.id, to: g, kind: 'contains', index: i })
@@ -187,7 +187,56 @@ function buildGraph(): { nodes: Map<string, KnowledgeNode>; links: KnowledgeLink
   return { nodes, links }
 }
 
+function validateGraph(
+  nodes: Map<string, KnowledgeNode>,
+  links: KnowledgeLink[],
+): void {
+  for (const entry of VOCABULARY) {
+    if (entry.wordIds) {
+      for (const wordId of entry.wordIds) {
+        if (!nodes.has(wordId)) {
+          throw new Error(`Phrase "${entry.surface}" references missing word id "${wordId}"`)
+        }
+      }
+    }
+  }
+
+  for (const link of links) {
+    const from = nodes.get(link.from)
+    const to = nodes.get(link.to)
+    if (!from || !to) {
+      throw new Error(`Dangling link: ${link.from} -[${link.kind}]-> ${link.to}`)
+    }
+
+    if (link.kind === 'part_of') {
+      const valid =
+        (from.kind === 'word' && to.kind === 'phrase') ||
+        (from.kind === 'letter' && to.kind === 'digraph')
+      if (!valid) {
+        throw new Error(`Invalid part_of: ${from.kind} "${from.label}" -> ${to.kind} "${to.label}"`)
+      }
+    }
+
+    if (link.kind === 'contains') {
+      const valid =
+        (from.kind === 'phrase' && to.kind === 'word') ||
+        ((from.kind === 'word' || from.kind === 'case') &&
+          (to.kind === 'letter' || to.kind === 'digraph'))
+      if (!valid) {
+        throw new Error(`Invalid contains: ${from.kind} "${from.label}" -> ${to.kind} "${to.label}"`)
+      }
+    }
+
+    if (link.kind === 'constituent') {
+      if (from.kind !== 'digraph' || to.kind !== 'letter') {
+        throw new Error(`Invalid constituent: ${from.kind} -> ${to.kind}`)
+      }
+    }
+  }
+}
+
 const graph = buildGraph()
+validateGraph(graph.nodes, graph.links)
 
 export const KNOWLEDGE_NODES = graph.nodes
 export const KNOWLEDGE_LINKS = graph.links
@@ -263,10 +312,91 @@ export function getLinkedNodesByKind(
   return grouped
 }
 
+/** UI tab groups — letters and digraphs shown together as "Sounds". */
+export type LinkGroup = 'words' | 'phrases' | 'sounds' | 'cases'
+
+const LINK_GROUP_ORDER: LinkGroup[] = ['phrases', 'words', 'sounds', 'cases']
+
+export const LINK_GROUP_LABELS: Record<LinkGroup, string> = {
+  words: 'Words',
+  phrases: 'Phrases',
+  sounds: 'Sounds',
+  cases: 'Case forms',
+}
+
+function linkGroupForNode(node: KnowledgeNode): LinkGroup | null {
+  if (node.kind === 'word') return 'words'
+  if (node.kind === 'phrase') return 'phrases'
+  if (node.kind === 'case') return 'cases'
+  if (node.kind === 'letter' || node.kind === 'digraph') return 'sounds'
+  return null
+}
+
+export function groupLinkedNodes(nodes: KnowledgeNode[]): Partial<Record<LinkGroup, KnowledgeNode[]>> {
+  const grouped: Partial<Record<LinkGroup, KnowledgeNode[]>> = {}
+  for (const node of nodes) {
+    const group = linkGroupForNode(node)
+    if (!group) continue
+    const list = grouped[group] ?? []
+    list.push(node)
+    grouped[group] = list
+  }
+  return grouped
+}
+
+export function getLinkGroupsWithNodes(nodes: KnowledgeNode[]): LinkGroup[] {
+  const grouped = groupLinkedNodes(nodes)
+  return LINK_GROUP_ORDER.filter((g) => (grouped[g]?.length ?? 0) > 0)
+}
+
+/** Downward composition: what this node is made of. */
+export function getDownwardLinks(nodeId: string): KnowledgeNode[] {
+  const node = getKnowledgeNode(nodeId)
+  if (!node) return []
+
+  switch (node.kind) {
+    case 'digraph':
+      return getConstituentLetters(nodeId)
+    case 'phrase':
+      return getConstituents(nodeId, ['word'])
+    case 'word':
+    case 'case':
+      return getConstituents(nodeId, ['letter', 'digraph'])
+    default:
+      return []
+  }
+}
+
+/** Upward composition: larger items this node belongs to. */
+export function getUpwardLinks(nodeId: string): KnowledgeNode[] {
+  const node = getKnowledgeNode(nodeId)
+  if (!node) return []
+
+  switch (node.kind) {
+    case 'letter':
+      return [
+        ...getPartOfTargets(nodeId, ['digraph']),
+        ...getContainers(nodeId, ['word', 'phrase', 'case']),
+      ]
+    case 'digraph':
+      return getContainers(nodeId, ['word', 'phrase', 'case'])
+    case 'word':
+      return getPartOfTargets(nodeId, ['phrase'])
+    case 'case':
+      return getContainers(nodeId, ['phrase'])
+    default:
+      return []
+  }
+}
+
+export function dedupeNodes(nodes: KnowledgeNode[]): KnowledgeNode[] {
+  return [...new Map(nodes.map((n) => [n.id, n])).values()]
+}
+
 export function getLemmaForms(lemmaId: string): KnowledgeNode[] {
-  return getOutgoingLinks(lemmaId, 'part_of')
-    .filter((l) => getKnowledgeNode(l.to)?.kind === 'case')
-    .map((l) => getKnowledgeNode(l.to)!)
+  return getIncomingLinks(lemmaId, 'inflection_of')
+    .map((l) => getKnowledgeNode(l.from))
+    .filter((n): n is KnowledgeNode => Boolean(n))
 }
 
 export function getUnitModuleId(unitId: string): 'alphabet' | 'digraphs' {

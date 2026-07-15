@@ -2,14 +2,15 @@ import { useState } from 'react'
 import { getWord, WORD_BANK, type WordEntry } from '../data/wordBank'
 import { getModuleUnits, getUnit, getGeneralLesson, resolveUnitModule } from '../data/moduleRegistry'
 import {
-  getConstituents,
-  getConstituentLetters,
-  getContainers,
+  dedupeNodes,
+  getDownwardLinks,
   getKnowledgeNode,
   getLemmaForms,
-  getLinkedNodesByKind,
-  getPartOfTargets,
+  getLinkGroupsWithNodes,
   getTeachesWords,
+  getUpwardLinks,
+  groupLinkedNodes,
+  LINK_GROUP_LABELS,
   CASE_USAGE_RULES,
 } from '../data/knowledge/registry'
 import { useLessonDrawer } from '../context/LessonDrawerContext'
@@ -23,17 +24,8 @@ import {
   wordAudioSourceLabel,
 } from '../lib/speech/audio'
 import { haptic } from '../lib/feedback'
-import type { KnowledgeKind, KnowledgeNode } from '../data/knowledge/types'
-
-const KIND_TAB_LABELS: Record<KnowledgeKind, string> = {
-  word: 'Words',
-  phrase: 'Phrases',
-  letter: 'Letters',
-  digraph: 'Digraphs',
-  case: 'Case forms',
-}
-
-const KIND_TAB_ORDER: KnowledgeKind[] = ['phrase', 'word', 'case', 'digraph', 'letter']
+import type { KnowledgeNode } from '../data/knowledge/types'
+import type { LinkGroup } from '../data/knowledge/registry'
 
 function LinkChip({
   label,
@@ -84,11 +76,11 @@ function LinkedNodesTabs({
   nodes: KnowledgeNode[]
 }) {
   const { openNode } = useKnowledgeNavigation()
-  const grouped = getLinkedNodesByKind(nodes)
-  const tabs = KIND_TAB_ORDER.filter((kind) => (grouped[kind]?.length ?? 0) > 0)
-  const [activeKind, setActiveKind] = useState<KnowledgeKind | null>(null)
-  const selectedKind = activeKind && tabs.includes(activeKind) ? activeKind : tabs[0] ?? null
-  const visible = selectedKind ? grouped[selectedKind] ?? [] : []
+  const grouped = groupLinkedNodes(nodes)
+  const tabs = getLinkGroupsWithNodes(nodes)
+  const [activeGroup, setActiveGroup] = useState<LinkGroup | null>(null)
+  const selectedGroup = activeGroup && tabs.includes(activeGroup) ? activeGroup : tabs[0] ?? null
+  const visible = selectedGroup ? grouped[selectedGroup] ?? [] : nodes
 
   if (!nodes.length) return null
 
@@ -97,22 +89,22 @@ function LinkedNodesTabs({
       <p className="text-sm font-medium text-slate-400 mb-2">{title}</p>
       {tabs.length > 1 && (
         <div className="mb-2 flex flex-wrap gap-1">
-          {tabs.map((kind) => (
+          {tabs.map((group) => (
             <button
-              key={kind}
+              key={group}
               type="button"
               onClick={() => {
                 haptic('tap')
-                setActiveKind(kind)
+                setActiveGroup(group)
               }}
               className={`rounded-lg px-2.5 py-1 text-xs font-medium transition-colors ${
-                selectedKind === kind
+                selectedGroup === group
                   ? 'bg-sky-600/80 text-white'
                   : 'bg-slate-800 text-slate-400 hover:bg-slate-700'
               }`}
             >
-              {KIND_TAB_LABELS[kind]}
-              <span className="ml-1 opacity-70">({grouped[kind]?.length ?? 0})</span>
+              {LINK_GROUP_LABELS[group]}
+              <span className="ml-1 opacity-70">({grouped[group]?.length ?? 0})</span>
             </button>
           ))}
         </div>
@@ -132,41 +124,11 @@ function LinkedNodesTabs({
 }
 
 function ConstituentsSection({ nodeId, title }: { nodeId: string; title: string }) {
-  const node = getKnowledgeNode(nodeId)
-  if (!node) return null
-
-  let parts: KnowledgeNode[] = []
-  if (node.kind === 'digraph') {
-    parts = getConstituentLetters(nodeId)
-  } else if (node.kind === 'phrase') {
-    parts = getConstituents(nodeId)
-  } else {
-    parts = getConstituents(nodeId, ['letter', 'digraph'])
-  }
-
-  return <LinkedNodesTabs title={title} nodes={parts} />
+  return <LinkedNodesTabs title={title} nodes={getDownwardLinks(nodeId)} />
 }
 
 function ParentsSection({ nodeId }: { nodeId: string }) {
-  const node = getKnowledgeNode(nodeId)
-  if (!node) return null
-
-  let parents: KnowledgeNode[] = []
-  if (node.kind === 'letter' || node.kind === 'digraph') {
-    parents = [
-      ...getPartOfTargets(nodeId, ['digraph']),
-      ...getContainers(nodeId, ['word', 'phrase', 'case']),
-    ]
-  } else if (node.kind === 'word' || node.kind === 'case') {
-    parents = [
-      ...getPartOfTargets(nodeId, ['phrase']),
-      ...getContainers(nodeId, ['phrase']),
-      ...getPartOfTargets(nodeId, ['letter', 'digraph']),
-    ]
-  }
-
-  const unique = [...new Map(parents.map((p) => [p.id, p])).values()]
-  return <LinkedNodesTabs title="Part of" nodes={unique} />
+  return <LinkedNodesTabs title="Part of" nodes={dedupeNodes(getUpwardLinks(nodeId))} />
 }
 
 function UnitEntry({
@@ -229,8 +191,10 @@ function UnitEntry({
       )}
 
       {node?.kind === 'digraph' && (
-        <ConstituentsSection nodeId={letterId} title="Made of letters" />
+        <ConstituentsSection nodeId={letterId} title="Made of" />
       )}
+
+      <ParentsSection nodeId={letterId} />
 
       {exampleWords.length > 0 && (
         <div>
@@ -320,6 +284,8 @@ function CaseEntryPanel({ node }: { node: KnowledgeNode }) {
       )}
 
       <ConstituentsSection nodeId={node.id} title="Graphemes" />
+
+      <ParentsSection nodeId={node.id} />
     </div>
   )
 }
