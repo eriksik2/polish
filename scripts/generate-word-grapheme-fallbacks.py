@@ -92,6 +92,21 @@ def word_to_audio_grapheme_ids(word: str) -> list[str]:
     return sequence
 
 
+MAX_COMPOSABLE = 6
+
+
+def is_composable_word_audio(surface: str, audio_ids: list[str]) -> bool:
+    if not audio_ids or len(audio_ids) > MAX_COMPOSABLE:
+        return False
+    if re.search(r"\s", surface.strip()):
+        return False
+    clean = re.sub(r"[^\wąćęłńóśźż]", "", surface, flags=re.IGNORECASE)
+    if not clean:
+        return False
+    expected = word_to_audio_grapheme_ids(clean)
+    return len(expected) == len(audio_ids) and all(a == b for a, b in zip(expected, audio_ids))
+
+
 def playable_graphemes(word: str, letters: set[str], digraphs: set[str]) -> list[str] | None:
     sequence = word_to_audio_grapheme_ids(word)
     for g in sequence:
@@ -102,6 +117,8 @@ def playable_graphemes(word: str, letters: set[str], digraphs: set[str]) -> list
             return None
         elif g not in letters:
             return None
+    if not is_composable_word_audio(word, sequence):
+        return None
     return sequence if sequence else None
 
 
