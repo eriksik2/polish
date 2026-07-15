@@ -145,7 +145,7 @@ export const GENERAL_BASIC_WORDS_LESSON = {
     },
     {
       heading: 'Tips',
-      body: 'Tap any word to hear it when audio is available. Formal address uses pan (sir) and pani (madam) — practise those phrases in the Greetings lesson.',
+      body: 'Tap any word to hear it. Native recordings play full words; words marked “Letter sounds” spell out using alphabet and digraph clips until a native recording is added.',
     },
   ],
 }

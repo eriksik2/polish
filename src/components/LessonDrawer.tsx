@@ -2,7 +2,7 @@ import { getWord, WORD_BANK, type WordEntry } from '../data/wordBank'
 import { getModuleUnits, getUnit, getGeneralLesson, resolveUnitModule } from '../data/moduleRegistry'
 import { useLessonDrawer } from '../context/LessonDrawerContext'
 import { useSettings } from '../hooks/useSettings'
-import { hasUnitRecording, hasWordRecording, playUnitAudio, playWordAudio } from '../lib/speech/audio'
+import { hasUnitRecording, hasWordPlayback, getWordAudioSource, playUnitAudio, playWordAudio, wordAudioSourceLabel } from '../lib/speech/audio'
 import { haptic } from '../lib/feedback'
 
 function UnitEntry({
@@ -89,6 +89,9 @@ function UnitEntry({
 }
 
 function WordEntryPanel({ word }: { word: WordEntry }) {
+  const audioSource = getWordAudioSource(word.id)
+  const fallbackLabel = wordAudioSourceLabel(audioSource)
+
   const playSound = () => {
     haptic('tap')
     playWordAudio(word.id)
@@ -100,8 +103,11 @@ function WordEntryPanel({ word }: { word: WordEntry }) {
         <div>
           <p className="text-3xl font-serif text-red-400">{word.word}</p>
           <p className="text-sm text-slate-400 mt-1">{word.meaning}</p>
+          {fallbackLabel && (
+            <p className="text-[10px] text-amber-500/80 mt-1">{fallbackLabel}</p>
+          )}
         </div>
-        {hasWordRecording(word.id) && (
+        {hasWordPlayback(word.id) && (
           <button
             type="button"
             onClick={playSound}
@@ -228,7 +234,9 @@ export function WordGrid({
   words: WordEntry[]
   onSelect: (wordId: string) => void
 }) {
-  const filtered = words.filter((w) => w.modules.includes(moduleId as 'alphabet' | 'digraphs'))
+  const filtered = words.filter((w) =>
+    w.modules.includes(moduleId as 'alphabet' | 'digraphs' | 'basic-words'),
+  )
   const sorted = [...filtered].sort((a, b) => a.word.localeCompare(b.word, 'pl'))
 
   return (

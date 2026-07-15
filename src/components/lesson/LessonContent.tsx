@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { getUnit } from '../../data/moduleRegistry'
 import { getWord } from '../../data/wordBank'
 import { getBasicWord } from '../../data/basicWords'
-import { hasUnitRecording, hasWordRecording, playUnitAudio, playWordAudio } from '../../lib/speech/audio'
+import { hasUnitRecording, hasWordPlayback, getWordAudioSource, playUnitAudio, playWordAudio, wordAudioSourceLabel } from '../../lib/speech/audio'
 import { haptic } from '../../lib/feedback'
 import type { LessonBlock } from '../../types/lesson'
 import type { PolishLetter } from '../../data/moduleRegistry'
@@ -52,7 +52,9 @@ function WordBadge({ wordId }: { wordId: string }) {
   const basic = getBasicWord(wordId)
   if (!word) return null
 
-  const playable = hasWordRecording(wordId)
+  const playable = hasWordPlayback(wordId)
+  const audioSource = getWordAudioSource(wordId)
+  const fallbackLabel = wordAudioSourceLabel(audioSource)
 
   const handleClick = () => {
     if (!playable) return
@@ -80,6 +82,9 @@ function WordBadge({ wordId }: { wordId: string }) {
     >
       <span className="block font-serif text-lg text-red-400">{word.word}</span>
       <span className="block text-xs text-slate-500 mt-0.5">{word.meaning}</span>
+      {fallbackLabel && (
+        <span className="block text-[10px] text-amber-500/80 mt-1">{fallbackLabel}</span>
+      )}
       {basic?.tip && (
         <span className="block text-[10px] text-slate-600 mt-1">{basic.tip}</span>
       )}
