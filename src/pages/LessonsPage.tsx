@@ -49,6 +49,7 @@ export function LessonsPage() {
         </button>
       )}
 
+      {units.length > 0 && (
       <section>
         <h2 className="text-sm font-medium text-slate-400 mb-3">
           Letters & digraphs ({units.length})
@@ -61,6 +62,7 @@ export function LessonsPage() {
           }}
         />
       </section>
+      )}
 
       <section>
         <div className="flex items-center justify-between gap-2 mb-3">

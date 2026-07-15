@@ -1,5 +1,6 @@
 import { POLISH_ALPHABET } from '../data/alphabet'
 import { POLISH_DIGRAPHS } from '../data/digraphs'
+import { BASIC_WORD_ENTRIES } from '../data/basicWords'
 import type { PolishLetter } from '../data/alphabet'
 import { getUnit } from '../data/moduleRegistry'
 import { hasWordRecording } from '../lib/speech/audio'
@@ -27,7 +28,7 @@ export interface WordEntry {
   graphemes: string[]
   /** Which units this word can teach (with highlight position) */
   unitLinks: WordUnitLink[]
-  modules: ('alphabet' | 'digraphs')[]
+  modules: ('alphabet' | 'digraphs' | 'basic-words')[]
 }
 
 export function wordIdFromWord(word: string): string {
@@ -131,6 +132,7 @@ function buildFromUnits(units: PolishLetter[]): WordEntry[] {
 export const WORD_BANK: WordEntry[] = mergeEntries([
   ...buildFromUnits(POLISH_ALPHABET),
   ...buildFromUnits(POLISH_DIGRAPHS),
+  ...BASIC_WORD_ENTRIES,
 ])
 
 export const WORD_MAP = new Map(WORD_BANK.map((w) => [w.id, w]))
@@ -140,6 +142,7 @@ export function getWord(id: string): WordEntry | undefined {
 }
 
 export function getWordsForUnit(moduleId: string, unitId: string): WordEntry[] {
+  if (moduleId === 'basic-words') return []
   return WORD_BANK.filter(
     (w) => w.modules.includes(moduleId as 'alphabet' | 'digraphs') && w.unitLinks.some((l) => l.unitId === unitId),
   )
@@ -151,9 +154,44 @@ export function getWordsWithAudioForUnit(moduleId: string, unitId: string): Word
 
 export function getWordsWithAudio(moduleId: string): WordEntry[] {
   return WORD_BANK.filter(
-    (w) => w.modules.includes(moduleId as 'alphabet' | 'digraphs') && hasWordRecording(w.id),
+    (w) =>
+      w.modules.includes(moduleId as 'alphabet' | 'digraphs' | 'basic-words') &&
+      hasWordRecording(w.id),
   )
 }
+
+export function getWordsForModule(moduleId: string): WordEntry[] {
+  return WORD_BANK.filter((w) => w.modules.includes(moduleId as 'alphabet' | 'digraphs' | 'basic-words'))
+}
+
+export function getWordsByIds(ids: string[]): WordEntry[] {
+  return ids.map((id) => WORD_MAP.get(id)).filter((w): w is WordEntry => Boolean(w))
+}
+
+/** Pick meaning options for vocabulary exercises from a lesson word pool */
+export function pickVocabMeaningOptions(
+  correctId: string,
+  poolIds: string[],
+  count: number,
+): { correct: WordEntry; distractors: WordEntry[] } | null {
+  const correct = WORD_MAP.get(correctId)
+  if (!correct) return null
+  const pool = getWordsByIds(poolIds).filter((w) => w.id !== correctId)
+  if (pool.length < count - 1) return null
+  const shuffled = shuffle([...pool])
+  return { correct, distractors: shuffled.slice(0, count - 1) }
+}
+
+/** Pick Polish word options when shown an English meaning */
+export function pickVocabWordOptions(
+  correctId: string,
+  poolIds: string[],
+  count: number,
+): { correct: WordEntry; distractors: WordEntry[] } | null {
+  return pickVocabMeaningOptions(correctId, poolIds, count)
+}
+
+import { shuffle } from '../lib/scheduler'
 
 function moduleForGrapheme(g: string): 'alphabet' | 'digraphs' {
   return (POLISH_DIGRAPH_IDS as Set<string>).has(g) ? 'digraphs' : 'alphabet'

@@ -4,6 +4,7 @@ import { FINAL_QUIZ_SIZE, SECTION_QUIZ_SIZE } from '../../types/lesson'
 export const ALPHABET_LESSON: StructuredLesson = {
   id: 'alphabet-fundamentals',
   moduleId: 'alphabet',
+  category: 'first-steps',
   title: 'Polish Alphabet Fundamentals',
   subtitle: 'Sounds, spelling, and the letters that trip up English speakers',
   estimatedMinutes: 45,

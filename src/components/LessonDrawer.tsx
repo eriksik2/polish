@@ -249,5 +249,7 @@ export function WordGrid({
 }
 
 export function getKnowledgeWords(moduleId: string): WordEntry[] {
-  return WORD_BANK.filter((w) => w.modules.includes(moduleId as 'alphabet' | 'digraphs'))
+  return WORD_BANK.filter((w) =>
+    w.modules.includes(moduleId as 'alphabet' | 'digraphs' | 'basic-words'),
+  )
 }
