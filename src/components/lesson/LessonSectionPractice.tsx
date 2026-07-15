@@ -1,33 +1,67 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { ExerciseCard } from '../ExerciseCard'
+import { LessonPopQuestionCard } from './LessonPopQuestionCard'
 import { generateExercise } from '../../lib/exercises'
 import type { Exercise } from '../../lib/exercises'
-import type { LessonPracticePreset } from '../../types/lesson'
+import type { LessonPopQuestion, LessonPracticePreset } from '../../types/lesson'
 import { shuffle } from '../../lib/scheduler'
 
 interface LessonSectionPracticeProps {
   moduleId: string
   preset: LessonPracticePreset
   title: string
+  popQuestions?: LessonPopQuestion[]
   onComplete: (passed: boolean, wrongUnitIds: string[]) => void
   onCancel: () => void
 }
 
-function buildPresetQueue(
+type QuizItem =
+  | { kind: 'exercise'; moduleId: string; letterId: string; format: LessonPracticePreset['formats'][number] }
+  | { kind: 'pop'; question: LessonPopQuestion }
+
+function buildExercisePool(
   moduleId: string,
   preset: LessonPracticePreset,
-): { moduleId: string; letterId: string; format: LessonPracticePreset['formats'][number] }[] {
-  const pool: { moduleId: string; letterId: string; format: LessonPracticePreset['formats'][number] }[] = []
+): QuizItem[] {
+  const pool: QuizItem[] = []
   for (const letterId of preset.unitIds) {
     for (const format of preset.formats) {
-      pool.push({ moduleId, letterId, format })
+      pool.push({ kind: 'exercise', moduleId, letterId, format })
     }
   }
-  const shuffled = shuffle(pool)
-  const result: typeof pool = []
+  return shuffle(pool)
+}
+
+function buildSectionQuizQueue(
+  moduleId: string,
+  preset: LessonPracticePreset,
+  popQuestions: LessonPopQuestion[],
+): QuizItem[] {
+  const total = preset.exerciseCount
+  const popCount = popQuestions.length > 0 ? Math.min(Math.floor(total / 2), popQuestions.length) : 0
+  const exerciseCount = total - popCount
+
+  const exercisePool = buildExercisePool(moduleId, preset)
+  const exercises: QuizItem[] = []
   let i = 0
-  while (result.length < preset.exerciseCount && shuffled.length > 0) {
-    result.push(shuffled[i % shuffled.length])
+  while (exercises.length < exerciseCount && exercisePool.length > 0) {
+    exercises.push(exercisePool[i % exercisePool.length])
+    i++
+  }
+
+  const pops: QuizItem[] = shuffle([...popQuestions])
+    .slice(0, popCount)
+    .map((question) => ({ kind: 'pop', question }))
+
+  return shuffle([...exercises, ...pops])
+}
+
+function buildFinalQuizQueue(moduleId: string, preset: LessonPracticePreset): QuizItem[] {
+  const pool = buildExercisePool(moduleId, preset)
+  const result: QuizItem[] = []
+  let i = 0
+  while (result.length < preset.exerciseCount && pool.length > 0) {
+    result.push(pool[i % pool.length])
     i++
   }
   return result
@@ -43,10 +77,15 @@ export function LessonSectionPractice({
   moduleId,
   preset,
   title,
+  popQuestions = [],
   onComplete,
   onCancel,
 }: LessonSectionPracticeProps) {
-  const [queue] = useState(() => buildPresetQueue(moduleId, preset))
+  const [queue] = useState(() =>
+    popQuestions.length > 0
+      ? buildSectionQuizQueue(moduleId, preset, popQuestions)
+      : buildFinalQuizQueue(moduleId, preset),
+  )
   const [index, setIndex] = useState(0)
   const [exercise, setExercise] = useState<Exercise | null>(null)
   const [answered, setAnswered] = useState(0)
@@ -56,18 +95,25 @@ export function LessonSectionPractice({
   const [remaining, setRemaining] = useState(preset.timeLimitSec)
   const resultsRef = useRef({ correct: 0, wrong: [] as string[] })
 
-  const loadAt = useCallback(
+  const currentItem = queue[index]
+
+  const loadExerciseAt = useCallback(
     (idx: number) => {
-      if (idx >= queue.length) return null
       const item = queue[idx]
+      if (!item || item.kind !== 'exercise') return null
       return generateExercise(item.moduleId, item.letterId, item.format)
     },
     [queue],
   )
 
   useEffect(() => {
-    setExercise(loadAt(0))
-  }, [loadAt])
+    if (currentItem?.kind === 'exercise') {
+      setExercise(loadExerciseAt(index))
+    } else {
+      setExercise(null)
+    }
+    setAwaitingContinue(false)
+  }, [index, currentItem?.kind, loadExerciseAt])
 
   useEffect(() => {
     if (!preset.timeLimitSec || done) return
@@ -81,33 +127,45 @@ export function LessonSectionPractice({
     return () => clearInterval(t)
   }, [remaining, done, preset, answered, onComplete])
 
+  const finishQuiz = () => {
+    const acc = (resultsRef.current.correct / queue.length) * 100
+    setDone(true)
+    onComplete(acc >= preset.passAccuracy, [...new Set(resultsRef.current.wrong)])
+  }
+
   const advance = () => {
     setAwaitingContinue(false)
     const next = index + 1
     if (next >= queue.length) {
-      const acc = (resultsRef.current.correct / queue.length) * 100
-      setDone(true)
-      onComplete(acc >= preset.passAccuracy, [...new Set(resultsRef.current.wrong)])
+      finishQuiz()
       return
     }
     setIndex(next)
-    setExercise(loadAt(next))
   }
 
-  const handleAnswer = (ok: boolean, _ms: number) => {
+  const recordAnswer = (ok: boolean, letterId?: string) => {
     if (ok) {
       resultsRef.current.correct++
       setCorrect((c) => c + 1)
-    } else if (exercise) {
-      resultsRef.current.wrong.push(exercise.letterId)
+    } else if (letterId) {
+      resultsRef.current.wrong.push(letterId)
     }
     setAnswered((a) => a + 1)
     setAwaitingContinue(true)
   }
 
+  const handleExerciseAnswer = (ok: boolean, _ms: number) => {
+    recordAnswer(ok, exercise?.letterId)
+  }
+
+  const handlePopAnswer = (ok: boolean) => {
+    recordAnswer(ok)
+  }
+
   if (done) return null
 
   const accuracy = answered > 0 ? Math.round((correct / answered) * 100) : 0
+  const displayIndex = index + (awaitingContinue ? 0 : 1)
 
   return (
     <div className="space-y-4 rounded-2xl border border-red-500/30 bg-red-500/5 p-4">
@@ -115,7 +173,7 @@ export function LessonSectionPractice({
         <div>
           <p className="font-semibold text-red-300">{title}</p>
           <p className="text-xs text-slate-500">
-            {index + (awaitingContinue ? 0 : 1)} / {queue.length} · need {preset.passAccuracy}%
+            {displayIndex} / {queue.length} · need {preset.passAccuracy}%
           </p>
         </div>
         {remaining !== null && (
@@ -123,11 +181,18 @@ export function LessonSectionPractice({
         )}
       </div>
 
-      {exercise ? (
+      {currentItem?.kind === 'pop' ? (
+        <LessonPopQuestionCard
+          key={currentItem.question.id}
+          question={currentItem.question}
+          onAnswer={handlePopAnswer}
+          onContinue={advance}
+        />
+      ) : exercise ? (
         <ExerciseCard
           key={exercise.id}
           exercise={exercise}
-          onAnswer={handleAnswer}
+          onAnswer={handleExerciseAnswer}
           onContinue={advance}
           noHelp={!preset.helpAllowed}
           quickMode={false}

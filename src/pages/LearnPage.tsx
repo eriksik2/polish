@@ -4,13 +4,26 @@ import { getLesson, sectionForUnit, STRUCTURED_LESSONS } from '../data/lessons'
 import { LessonContent } from '../components/lesson/LessonContent'
 import { LessonSectionPractice } from '../components/lesson/LessonSectionPractice'
 import {
+  computeLessonProgressPercent,
   getLessonProgress,
   markLessonComplete,
   markSectionComplete,
+  markSectionRead,
+  sectionProgressState,
 } from '../lib/lessonProgress'
 import type { LessonProgress } from '../types/lesson'
 
 type Phase = 'read' | 'practice' | 'final' | 'remediation' | 'complete'
+
+function SectionProgressDot({ state }: { state: 'unstarted' | 'in-progress' | 'complete' }) {
+  if (state === 'complete') {
+    return <span className="ml-1 text-green-400">✓</span>
+  }
+  if (state === 'in-progress') {
+    return <span className="ml-1 text-amber-400">◐</span>
+  }
+  return null
+}
 
 export function LessonPage() {
   const { lessonId } = useParams<{ lessonId: string }>()
@@ -27,7 +40,20 @@ export function LessonPage() {
     getLessonProgress(lessonId).then(setProgress)
   }, [lessonId])
 
-  if (!lesson) {
+  const section = lesson?.sections[sectionIndex]
+  const isFinalSection =
+    lesson && section
+      ? sectionIndex === lesson.sections.length - 1 && section.kind === 'recap'
+      : false
+
+  useEffect(() => {
+    if (!lessonId || !section || phase !== 'read') return
+    markSectionRead(lessonId, section.id).then(() => {
+      getLessonProgress(lessonId).then(setProgress)
+    })
+  }, [lessonId, section?.id, phase])
+
+  if (!lesson || !section) {
     return (
       <div className="p-4">
         <p className="text-slate-400">Lesson not found.</p>
@@ -38,8 +64,7 @@ export function LessonPage() {
     )
   }
 
-  const section = lesson.sections[sectionIndex]
-  const isFinalSection = sectionIndex === lesson.sections.length - 1 && section.kind === 'recap'
+  const progressPercent = computeLessonProgressPercent(lesson, progress)
 
   const goToSection = (idx: number) => {
     setSectionIndex(idx)
@@ -48,7 +73,7 @@ export function LessonPage() {
   }
 
   const handlePracticeComplete = async (passed: boolean, wrongUnitIds: string[]) => {
-    if (!lessonId || !section) return
+    if (!lessonId) return
 
     if (phase === 'final') {
       if (passed) {
@@ -78,6 +103,7 @@ export function LessonPage() {
         )
         setPhase('remediation')
       }
+      setProgress(await getLessonProgress(lessonId))
       return
     }
 
@@ -120,6 +146,15 @@ export function LessonPage() {
         </button>
         <h1 className="text-xl font-bold">{lesson.title}</h1>
         <p className="text-sm text-slate-400">{lesson.subtitle}</p>
+        <div className="mt-2 flex items-center gap-3">
+          <div className="flex-1 h-1.5 rounded-full bg-slate-800 overflow-hidden">
+            <div
+              className="h-full rounded-full bg-red-500 transition-all"
+              style={{ width: `${progressPercent}%` }}
+            />
+          </div>
+          <span className="text-xs text-slate-400 shrink-0">{progressPercent}%</span>
+        </div>
         <p className="text-xs text-slate-600 mt-1">
           Section {sectionIndex + 1} of {lesson.sections.length}
           {completed && ' · ✓ Completed'}
@@ -192,7 +227,7 @@ export function LessonPage() {
               onClick={startPractice}
               className="w-full rounded-xl bg-red-600 py-3.5 font-semibold"
             >
-              {section.kind === 'recap' ? 'Start final quiz' : 'Practice this section'}
+              Practice this section
             </button>
           ) : isFinalSection ? (
             <button
@@ -218,6 +253,7 @@ export function LessonPage() {
         <LessonSectionPractice
           moduleId={lesson.moduleId}
           preset={section.practice}
+          popQuestions={section.popQuestions}
           title={`Practice: ${section.title}`}
           onComplete={handlePracticeComplete}
           onCancel={() => setPhase('read')}
@@ -235,25 +271,91 @@ export function LessonPage() {
       )}
 
       <div className="flex gap-2 overflow-x-auto pt-2">
-        {lesson.sections.map((s, i) => (
-          <button
-            key={s.id}
-            type="button"
-            onClick={() => goToSection(i)}
-            className={`shrink-0 rounded-lg px-2 py-1 text-[10px] ${
-              i === sectionIndex ? 'bg-red-600' : 'bg-slate-800 text-slate-500'
-            }`}
-          >
-            {s.kind === 'intro' ? 'Intro' : s.title.slice(0, 12)}
-          </button>
-        ))}
+        {lesson.sections.map((s, i) => {
+          const state = sectionProgressState(s, progress)
+          return (
+            <button
+              key={s.id}
+              type="button"
+              onClick={() => goToSection(i)}
+              className={`shrink-0 rounded-lg px-2 py-1 text-[10px] flex items-center ${
+                i === sectionIndex
+                  ? 'bg-red-600'
+                  : state === 'complete'
+                    ? 'bg-green-900/50 text-green-300'
+                    : state === 'in-progress'
+                      ? 'bg-amber-900/40 text-amber-200'
+                      : 'bg-slate-800 text-slate-500'
+              }`}
+            >
+              {s.kind === 'intro' ? 'Intro' : s.title.slice(0, 12)}
+              <SectionProgressDot state={state} />
+            </button>
+          )
+        })}
+        <button
+          type="button"
+          onClick={() => setPhase('final')}
+          className={`shrink-0 rounded-lg px-2 py-1 text-[10px] ${
+            phase === 'final'
+              ? 'bg-red-600'
+              : progress?.finalQuizPassed
+                ? 'bg-green-900/50 text-green-300'
+                : 'bg-slate-800 text-slate-500'
+          }`}
+        >
+          Final{progress?.finalQuizPassed && <span className="ml-1 text-green-400">✓</span>}
+        </button>
       </div>
     </div>
   )
 }
 
+function CourseCard({
+  lesson,
+  progress,
+}: {
+  lesson: (typeof STRUCTURED_LESSONS)[number]
+  progress?: LessonProgress
+}) {
+  const percent = computeLessonProgressPercent(lesson, progress)
+
+  return (
+    <Link
+      to={`/learn/${lesson.id}`}
+      className="block rounded-2xl border border-slate-700 bg-slate-800/50 p-4 hover:border-red-500/40 transition-colors"
+    >
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-xs text-red-400/80 uppercase tracking-wide">
+          {lesson.moduleId} · ~{lesson.estimatedMinutes} min
+        </p>
+        <span className="text-xs text-slate-400">{percent}%</span>
+      </div>
+      <div className="mt-2 h-1 rounded-full bg-slate-700 overflow-hidden">
+        <div
+          className="h-full rounded-full bg-red-500/80 transition-all"
+          style={{ width: `${percent}%` }}
+        />
+      </div>
+      <h2 className="font-semibold text-lg mt-2">{lesson.title}</h2>
+      <p className="text-sm text-slate-400 mt-1">{lesson.subtitle}</p>
+    </Link>
+  )
+}
+
 export function LearnPage() {
   const [tab, setTab] = useState<'courses' | 'reference'>('courses')
+  const [progressMap, setProgressMap] = useState<Record<string, LessonProgress>>({})
+
+  useEffect(() => {
+    Promise.all(STRUCTURED_LESSONS.map((l) => getLessonProgress(l.id))).then((rows) => {
+      const map: Record<string, LessonProgress> = {}
+      for (const row of rows) {
+        if (row) map[row.lessonId] = row
+      }
+      setProgressMap(map)
+    })
+  }, [])
 
   return (
     <div className="p-4 space-y-5">
@@ -286,17 +388,7 @@ export function LearnPage() {
       {tab === 'courses' && (
         <section className="space-y-3">
           {STRUCTURED_LESSONS.map((lesson) => (
-            <Link
-              key={lesson.id}
-              to={`/learn/${lesson.id}`}
-              className="block rounded-2xl border border-slate-700 bg-slate-800/50 p-4 hover:border-red-500/40 transition-colors"
-            >
-              <p className="text-xs text-red-400/80 uppercase tracking-wide">
-                {lesson.moduleId} · ~{lesson.estimatedMinutes} min
-              </p>
-              <h2 className="font-semibold text-lg mt-1">{lesson.title}</h2>
-              <p className="text-sm text-slate-400 mt-1">{lesson.subtitle}</p>
-            </Link>
+            <CourseCard key={lesson.id} lesson={lesson} progress={progressMap[lesson.id]} />
           ))}
         </section>
       )}

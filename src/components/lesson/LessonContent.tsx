@@ -1,29 +1,45 @@
+import { useState } from 'react'
 import { getUnit } from '../../data/moduleRegistry'
 import { hasUnitRecording, playUnitAudio } from '../../lib/speech/audio'
 import { haptic } from '../../lib/feedback'
 import type { LessonBlock } from '../../types/lesson'
 import type { PolishLetter } from '../../data/moduleRegistry'
 
-function AudioButton({
+function LetterBadge({
+  unit,
   moduleId,
-  unitId,
-  label,
 }: {
+  unit: PolishLetter
   moduleId: string
-  unitId: string
-  label?: string
 }) {
-  if (!hasUnitRecording(moduleId, unitId)) return null
+  const [playing, setPlaying] = useState(false)
+  const playable = hasUnitRecording(moduleId, unit.id)
+
+  const handleClick = () => {
+    if (!playable) return
+    haptic('tap')
+    setPlaying(true)
+    playUnitAudio(moduleId, unit.id, {
+      onEnd: () => setPlaying(false),
+      onError: () => setPlaying(false),
+    })
+  }
+
   return (
     <button
       type="button"
-      onClick={() => {
-        haptic('tap')
-        playUnitAudio(moduleId, unitId)
-      }}
-      className="inline-flex items-center gap-2 rounded-xl bg-red-600/20 border border-red-500/30 px-4 py-2.5 text-sm text-red-300 active:scale-[0.98]"
+      onClick={handleClick}
+      disabled={!playable}
+      title={playable ? `${unit.englishApprox} — tap to hear` : unit.englishApprox}
+      className={`rounded-lg px-3 py-2 font-serif text-xl transition-colors ${
+        playing
+          ? 'bg-amber-500/20 text-amber-300 ring-2 ring-amber-400/50'
+          : playable
+            ? 'bg-slate-800 text-red-400 active:scale-95 hover:bg-slate-700'
+            : 'bg-slate-800/60 text-red-400/70 cursor-default'
+      }`}
     >
-      🔊 {label ?? `Play ${unitId}`}
+      {unit.upper}
     </button>
   )
 }
@@ -51,16 +67,6 @@ export function LessonContent({ blocks }: { blocks: LessonBlock[] }) {
                 💡 {block.text}
               </p>
             )
-          case 'audio':
-            return (
-              <div key={i}>
-                <AudioButton
-                  moduleId={block.moduleId}
-                  unitId={block.unitId}
-                  label={block.label}
-                />
-              </div>
-            )
           case 'units': {
             const units = block.unitIds
               .map((id: string) => getUnit(block.moduleId, id))
@@ -71,14 +77,8 @@ export function LessonContent({ blocks }: { blocks: LessonBlock[] }) {
                   <p className="text-xs text-slate-500 mb-2">{block.title}</p>
                 )}
                 <div className="flex flex-wrap gap-2">
-                  {units.map((u) => u && (
-                    <span
-                      key={u.id}
-                      className="rounded-lg bg-slate-800 px-3 py-2 font-serif text-xl text-red-400"
-                      title={u.englishApprox}
-                    >
-                      {u.upper}
-                    </span>
+                  {units.map((u) => (
+                    <LetterBadge key={u.id} unit={u} moduleId={block.moduleId} />
                   ))}
                 </div>
               </div>

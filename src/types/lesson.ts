@@ -1,12 +1,22 @@
 import type { ExerciseFormat } from '../data/modules'
 
+export const SECTION_QUIZ_SIZE = 10
+export const FINAL_QUIZ_SIZE = 20
+
 export type LessonBlock =
   | { type: 'heading'; text: string }
   | { type: 'paragraph'; text: string }
   | { type: 'tip'; text: string }
-  | { type: 'audio'; moduleId: string; unitId: string; label?: string }
   | { type: 'units'; moduleId: string; unitIds: string[]; title?: string }
   | { type: 'divider' }
+
+export interface LessonPopQuestion {
+  id: string
+  prompt: string
+  options: string[]
+  correctIndex: number
+  explanation?: string
+}
 
 export interface LessonPracticePreset {
   unitIds: string[]
@@ -24,6 +34,8 @@ export interface LessonSection {
   kind: 'intro' | 'teach' | 'recap'
   blocks: LessonBlock[]
   practice?: LessonPracticePreset
+  /** Section-specific knowledge checks mixed ~50/50 into section quizzes */
+  popQuestions?: LessonPopQuestion[]
 }
 
 export interface StructuredLesson {
@@ -39,6 +51,7 @@ export interface StructuredLesson {
 export interface LessonProgress {
   lessonId: string
   completedSectionIds: string[]
+  readSectionIds: string[]
   finalQuizPassed: boolean
   completedAt?: number
   weakSectionIds: string[]

@@ -40,6 +40,7 @@ export interface AppSettings {
 export interface LessonProgressRecord {
   lessonId: string
   completedSectionIds: string[]
+  readSectionIds?: string[]
   finalQuizPassed: boolean
   completedAt?: number
   weakSectionIds: string[]
