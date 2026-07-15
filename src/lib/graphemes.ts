@@ -137,6 +137,24 @@ export function graphemesToAudioIds(graphemes: string[]): string[] {
   return out
 }
 
+/** Max graphemes in a composed word clip — longer words sound wrong when spelled out. */
+export const MAX_COMPOSABLE_AUDIO_GRAPHENES = 6
+
+/**
+ * Whether letter-by-letter playback is a reasonable stand-in for a whole word.
+ * Rejects long words, phrases, and forms where sequential units won't match pronunciation.
+ */
+export function isComposableWordAudio(surface: string, audioIds: string[]): boolean {
+  if (!audioIds.length || audioIds.length > MAX_COMPOSABLE_AUDIO_GRAPHENES) return false
+  if (/\s/.test(surface.trim())) return false
+  const clean = surface.replace(/[^\p{L}]/gu, '')
+  if (!clean) return false
+  // Spelling must match merged audio units (no hidden phonological rewrites beyond soft pairs)
+  const expected = wordToAudioGraphemeIds(clean)
+  if (expected.length !== audioIds.length) return false
+  return expected.every((g, i) => g === audioIds[i])
+}
+
 /** Tokenize a word (or phrase) into audio-ready grapheme unit ids. */
 export function wordToAudioGraphemeIds(word: string): string[] {
   const parts = word.trim().split(/\s+/)

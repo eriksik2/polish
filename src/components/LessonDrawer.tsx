@@ -1,10 +1,14 @@
+import { useState } from 'react'
 import { getWord, WORD_BANK, type WordEntry } from '../data/wordBank'
 import { getModuleUnits, getUnit, getGeneralLesson, resolveUnitModule } from '../data/moduleRegistry'
 import {
   getConstituents,
+  getConstituentLetters,
+  getContainers,
   getKnowledgeNode,
   getLemmaForms,
-  getParents,
+  getLinkedNodesByKind,
+  getPartOfTargets,
   getTeachesWords,
   CASE_USAGE_RULES,
 } from '../data/knowledge/registry'
@@ -19,7 +23,17 @@ import {
   wordAudioSourceLabel,
 } from '../lib/speech/audio'
 import { haptic } from '../lib/feedback'
-import type { KnowledgeNode } from '../data/knowledge/types'
+import type { KnowledgeKind, KnowledgeNode } from '../data/knowledge/types'
+
+const KIND_TAB_LABELS: Record<KnowledgeKind, string> = {
+  word: 'Words',
+  phrase: 'Phrases',
+  letter: 'Letters',
+  digraph: 'Digraphs',
+  case: 'Case forms',
+}
+
+const KIND_TAB_ORDER: KnowledgeKind[] = ['phrase', 'word', 'case', 'digraph', 'letter']
 
 function LinkChip({
   label,
@@ -49,28 +63,62 @@ function LinkChip({
 }
 
 function useKnowledgeNavigation() {
-  const { openLesson, openWord } = useLessonDrawer()
+  const { navigateLesson, navigateWord } = useLessonDrawer()
   return {
     openNode: (node: KnowledgeNode) => {
       haptic('tap')
-      if (node.kind === 'letter') openLesson('alphabet', [node.id])
-      else if (node.kind === 'digraph') openLesson('digraphs', [node.id])
+      if (node.kind === 'letter') navigateLesson('alphabet', [node.id])
+      else if (node.kind === 'digraph') navigateLesson('digraphs', [node.id])
       else if (node.kind === 'word' || node.kind === 'phrase' || node.kind === 'case') {
-        openWord('basic-words', node.id)
+        navigateWord('basic-words', node.id)
       }
     },
   }
 }
 
-function ConstituentsSection({ nodeId, title }: { nodeId: string; title: string }) {
+function LinkedNodesTabs({
+  title,
+  nodes,
+}: {
+  title: string
+  nodes: KnowledgeNode[]
+}) {
   const { openNode } = useKnowledgeNavigation()
-  const parts = getConstituents(nodeId)
-  if (!parts.length) return null
+  const grouped = getLinkedNodesByKind(nodes)
+  const tabs = KIND_TAB_ORDER.filter((kind) => (grouped[kind]?.length ?? 0) > 0)
+  const [activeKind, setActiveKind] = useState<KnowledgeKind | null>(null)
+  const selectedKind = activeKind && tabs.includes(activeKind) ? activeKind : tabs[0] ?? null
+  const visible = selectedKind ? grouped[selectedKind] ?? [] : []
+
+  if (!nodes.length) return null
+
   return (
     <div>
       <p className="text-sm font-medium text-slate-400 mb-2">{title}</p>
+      {tabs.length > 1 && (
+        <div className="mb-2 flex flex-wrap gap-1">
+          {tabs.map((kind) => (
+            <button
+              key={kind}
+              type="button"
+              onClick={() => {
+                haptic('tap')
+                setActiveKind(kind)
+              }}
+              className={`rounded-lg px-2.5 py-1 text-xs font-medium transition-colors ${
+                selectedKind === kind
+                  ? 'bg-sky-600/80 text-white'
+                  : 'bg-slate-800 text-slate-400 hover:bg-slate-700'
+              }`}
+            >
+              {KIND_TAB_LABELS[kind]}
+              <span className="ml-1 opacity-70">({grouped[kind]?.length ?? 0})</span>
+            </button>
+          ))}
+        </div>
+      )}
       <div className="flex flex-wrap gap-2">
-        {parts.map((p) => (
+        {visible.map((p) => (
           <LinkChip
             key={p.id}
             label={p.label}
@@ -83,27 +131,42 @@ function ConstituentsSection({ nodeId, title }: { nodeId: string; title: string 
   )
 }
 
+function ConstituentsSection({ nodeId, title }: { nodeId: string; title: string }) {
+  const node = getKnowledgeNode(nodeId)
+  if (!node) return null
+
+  let parts: KnowledgeNode[] = []
+  if (node.kind === 'digraph') {
+    parts = getConstituentLetters(nodeId)
+  } else if (node.kind === 'phrase') {
+    parts = getConstituents(nodeId)
+  } else {
+    parts = getConstituents(nodeId, ['letter', 'digraph'])
+  }
+
+  return <LinkedNodesTabs title={title} nodes={parts} />
+}
+
 function ParentsSection({ nodeId }: { nodeId: string }) {
-  const { openNode } = useKnowledgeNavigation()
-  const parents = getParents(nodeId).filter(
-    (p) => p.kind === 'phrase' || p.kind === 'letter' || p.kind === 'digraph' || p.kind === 'word',
-  )
-  if (!parents.length) return null
-  return (
-    <div>
-      <p className="text-sm font-medium text-slate-400 mb-2">Part of</p>
-      <div className="flex flex-wrap gap-2">
-        {parents.map((p) => (
-          <LinkChip
-            key={p.id}
-            label={p.label}
-            sublabel={p.meaning}
-            onClick={() => openNode(p)}
-          />
-        ))}
-      </div>
-    </div>
-  )
+  const node = getKnowledgeNode(nodeId)
+  if (!node) return null
+
+  let parents: KnowledgeNode[] = []
+  if (node.kind === 'letter' || node.kind === 'digraph') {
+    parents = [
+      ...getPartOfTargets(nodeId, ['digraph']),
+      ...getContainers(nodeId, ['word', 'phrase', 'case']),
+    ]
+  } else if (node.kind === 'word' || node.kind === 'case') {
+    parents = [
+      ...getPartOfTargets(nodeId, ['phrase']),
+      ...getContainers(nodeId, ['phrase']),
+      ...getPartOfTargets(nodeId, ['letter', 'digraph']),
+    ]
+  }
+
+  const unique = [...new Map(parents.map((p) => [p.id, p])).values()]
+  return <LinkedNodesTabs title="Part of" nodes={unique} />
 }
 
 function UnitEntry({
@@ -298,8 +361,8 @@ function WordEntryPanel({ word }: { word: WordEntry }) {
         )}
       </div>
 
-      {node?.kind === 'phrase' && word.wordIds && (
-        <ConstituentsSection nodeId={word.id} title="Made of words" />
+      {node?.kind === 'phrase' && (
+        <ConstituentsSection nodeId={word.id} title="Made of" />
       )}
 
       {node?.kind !== 'phrase' && (
@@ -308,7 +371,7 @@ function WordEntryPanel({ word }: { word: WordEntry }) {
 
       {word.unitLinks.length > 0 && (
         <div>
-          <p className="text-sm font-medium text-slate-400 mb-2">Teaches</p>
+          <p className="text-sm font-medium text-slate-400 mb-2">Taught in</p>
           <div className="flex flex-wrap gap-2">
             {word.unitLinks.map((link) => {
               const mod = resolveUnitModule(link.unitId)
@@ -348,7 +411,7 @@ function WordEntryPanel({ word }: { word: WordEntry }) {
 }
 
 export function LessonDrawer() {
-  const { state, closeLesson } = useLessonDrawer()
+  const { state, closeLesson, goBack, canGoBack } = useLessonDrawer()
 
   if (!state.open) return null
 
@@ -367,8 +430,22 @@ export function LessonDrawer() {
         aria-label="Close knowledge panel"
       />
       <div className="relative max-h-[85dvh] overflow-y-auto rounded-t-2xl bg-slate-900 border-t border-slate-700 p-4 pb-8">
-        <div className="mb-4 flex items-center justify-between">
-          <h2 className="text-lg font-semibold">Knowledge</h2>
+        <div className="mb-4 flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2 min-w-0">
+            {canGoBack && (
+              <button
+                type="button"
+                onClick={() => {
+                  haptic('tap')
+                  goBack()
+                }}
+                className="shrink-0 rounded-lg bg-slate-800 px-3 py-1.5 text-sm text-slate-300"
+              >
+                ← Back
+              </button>
+            )}
+            <h2 className="text-lg font-semibold truncate">Knowledge</h2>
+          </div>
           <button
             type="button"
             onClick={closeLesson}

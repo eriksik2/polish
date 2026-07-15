@@ -6,6 +6,7 @@ import {
 } from '../data/moduleRegistry'
 import type { ExerciseFormat } from '../data/modules'
 import { hasNativeWordRecording } from './speech/audio'
+import { wordToAudioGraphemeIds } from './graphemes'
 import {
   pickUnitOptionsForWord,
   pickWordOptions,
@@ -559,7 +560,7 @@ function generateHearSequencePickWord(id: string, moduleId: string, letter: Poli
     correctAnswer: picked.correct.id,
     correctIndex,
     targetWordId: picked.correct.id,
-    playSequence: [...picked.correct.graphemes],
+    playSequence: wordToAudioGraphemeIds(picked.correct.word),
     prompt: 'Listen to each sound in order — which word is it?',
   }
 }

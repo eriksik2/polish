@@ -3,7 +3,7 @@ import digraphManifest from '../../data/digraph-audio-manifest.json'
 import nativeWordManifest from '../../data/word-audio-manifest.json'
 import fallbackData from '../../data/word-grapheme-fallbacks.json'
 import { getKnowledgeNode } from '../../data/knowledge/registry'
-import { POLISH_DIGRAPH_IDS, wordToAudioGraphemeIds } from '../graphemes'
+import { POLISH_DIGRAPH_IDS, isComposableWordAudio, wordToAudioGraphemeIds } from '../graphemes'
 
 const BASE = import.meta.env.BASE_URL
 
@@ -106,16 +106,22 @@ export function hasGraphemeFallbackWord(wordId: string): boolean {
 export function getGraphemeFallbackSequence(wordId: string): string[] | null {
   if (hasNativeWordRecording(wordId)) return null
   const stored = GRAPHENE_FALLBACKS[wordId]
-  if (stored?.length) return stored
   const node = getKnowledgeNode(wordId)
-  if (node) return buildAudioGraphemeSequence(node.label)
+  const surface = node?.label ?? wordId
+  if (stored?.length) {
+    return isComposableWordAudio(surface, stored) ? stored : null
+  }
+  if (node) {
+    const built = buildAudioGraphemeSequence(node.label)
+    return built && isComposableWordAudio(node.label, built) ? built : null
+  }
   return null
 }
 
 /** Build a playable grapheme sequence for a surface form (letters + digraphs with recordings). */
 export function buildAudioGraphemeSequence(surface: string): string[] | null {
   const ids = wordToAudioGraphemeIds(surface)
-  if (!ids.length) return null
+  if (!ids.length || !isComposableWordAudio(surface, ids)) return null
   for (const g of ids) {
     const moduleId = (POLISH_DIGRAPH_IDS as Set<string>).has(g) ? 'digraphs' : 'alphabet'
     if (!hasUnitRecording(moduleId, g)) return null
@@ -180,7 +186,7 @@ export function playWordAudio(
     return false
   }
 
-  const gapMs = sequence.length > 12 ? 220 : 300
+  const gapMs = sequence.length > 8 ? 70 : sequence.length > 4 ? 90 : 110
   stopUnitAudio()
   sequenceAbort = playGraphemeSequence(sequence, {
     gapMs,
@@ -206,7 +212,7 @@ export function playGraphemeSequence(
     onError?: () => void
   },
 ): () => void {
-  const gapMs = options?.gapMs ?? 350
+  const gapMs = options?.gapMs ?? 120
   let cancelled = false
   let index = 0
 

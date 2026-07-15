@@ -112,13 +112,12 @@ function buildGraph(): { nodes: Map<string, KnowledgeNode>; links: KnowledgeLink
     registerVocabNode(nodes, entry)
   }
 
-  // Grapheme composition for words & phrases
+  // Grapheme composition for words & phrases (no reverse part_of — graphemes are not parents)
   for (const entry of VOCABULARY) {
     const node = nodes.get(entry.id)!
     for (let i = 0; i < node.graphemeIds!.length; i++) {
       const g = node.graphemeIds![i]
       addLink({ from: entry.id, to: g, kind: 'contains', index: i })
-      addLink({ from: g, to: entry.id, kind: 'part_of', index: i })
     }
     if (entry.wordIds) {
       for (let i = 0; i < entry.wordIds.length; i++) {
@@ -215,17 +214,53 @@ export function getTeachesWords(unitId: string): KnowledgeNode[] {
     .filter((n): n is KnowledgeNode => Boolean(n))
 }
 
-export function getConstituents(nodeId: string): KnowledgeNode[] {
+export function getConstituents(nodeId: string, kinds?: KnowledgeKind[]): KnowledgeNode[] {
   return getOutgoingLinks(nodeId, 'contains')
     .sort((a, b) => (a.index ?? 0) - (b.index ?? 0))
     .map((l) => getKnowledgeNode(l.to))
     .filter((n): n is KnowledgeNode => Boolean(n))
+    .filter((n) => !kinds || kinds.includes(n.kind))
 }
 
-export function getParents(nodeId: string): KnowledgeNode[] {
+export function getConstituentLetters(nodeId: string): KnowledgeNode[] {
+  return getOutgoingLinks(nodeId, 'constituent')
+    .map((l) => getKnowledgeNode(l.to))
+    .filter((n): n is KnowledgeNode => Boolean(n))
+}
+
+/** Nodes that contain this node via a `contains` link (words/phrases/case forms). */
+export function getContainers(nodeId: string, kinds?: KnowledgeKind[]): KnowledgeNode[] {
+  return getIncomingLinks(nodeId, 'contains')
+    .map((l) => getKnowledgeNode(l.from))
+    .filter((n): n is KnowledgeNode => Boolean(n))
+    .filter((n) => !kinds || kinds.includes(n.kind))
+}
+
+export function getParents(nodeId: string, kinds?: KnowledgeKind[]): KnowledgeNode[] {
   return getIncomingLinks(nodeId, 'part_of')
     .map((l) => getKnowledgeNode(l.from))
     .filter((n): n is KnowledgeNode => Boolean(n))
+    .filter((n) => !kinds || kinds.includes(n.kind))
+}
+
+/** Nodes this item is a part of via outgoing `part_of` links (e.g. word → phrase, letter → digraph). */
+export function getPartOfTargets(nodeId: string, kinds?: KnowledgeKind[]): KnowledgeNode[] {
+  return getOutgoingLinks(nodeId, 'part_of')
+    .map((l) => getKnowledgeNode(l.to))
+    .filter((n): n is KnowledgeNode => Boolean(n))
+    .filter((n) => !kinds || kinds.includes(n.kind))
+}
+
+export function getLinkedNodesByKind(
+  nodes: KnowledgeNode[],
+): Partial<Record<KnowledgeKind, KnowledgeNode[]>> {
+  const grouped: Partial<Record<KnowledgeKind, KnowledgeNode[]>> = {}
+  for (const node of nodes) {
+    const list = grouped[node.kind] ?? []
+    list.push(node)
+    grouped[node.kind] = list
+  }
+  return grouped
 }
 
 export function getLemmaForms(lemmaId: string): KnowledgeNode[] {
