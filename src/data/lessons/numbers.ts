@@ -124,7 +124,7 @@ export const NUMBERS_LESSON: StructuredLesson = {
         },
         {
           type: 'words',
-          wordIds: ['ile', 'ile to kosztuje?', 'numer'],
+          wordIds: ['ile?', 'ile to kosztuje?', 'numer'],
           title: 'Useful phrases',
         },
       ],
@@ -162,7 +162,7 @@ export const NUMBERS_LESSON: StructuredLesson = {
       ],
       practice: {
         unitIds: [],
-        wordIds: ['szesc', 'siedem', 'osiem', 'dziewiec', 'dziesiec', 'ile', 'numer'],
+        wordIds: ['szesc', 'siedem', 'osiem', 'dziewiec', 'dziesiec', 'ile?', 'numer'],
         formats: [...VOCAB_FORMATS],
         exerciseCount: SECTION_QUIZ_SIZE,
         timeLimitSec: 300,
@@ -305,7 +305,7 @@ export const NUMBERS_LESSON: StructuredLesson = {
       'osiemnascie',
       'dziewietnascie',
       'dwadziescia',
-      'ile',
+      'ile?',
       'numer',
     ],
     formats: [...VOCAB_FORMATS],

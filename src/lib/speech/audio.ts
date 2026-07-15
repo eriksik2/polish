@@ -2,7 +2,8 @@ import letterManifest from '../../data/letter-audio-manifest.json'
 import digraphManifest from '../../data/digraph-audio-manifest.json'
 import nativeWordManifest from '../../data/word-audio-manifest.json'
 import fallbackData from '../../data/word-grapheme-fallbacks.json'
-import { POLISH_DIGRAPH_IDS } from '../graphemes'
+import { getKnowledgeNode } from '../../data/knowledge/registry'
+import { POLISH_DIGRAPH_IDS, wordToAudioGraphemeIds } from '../graphemes'
 
 const BASE = import.meta.env.BASE_URL
 
@@ -40,14 +41,18 @@ function audioUrl(moduleId: string, unitId: string): string | null {
   return `${BASE}${rel}`
 }
 
-export function stopUnitAudio(): void {
-  sequenceAbort?.()
-  sequenceAbort = null
+function stopCurrentClip(): void {
   if (currentAudio) {
     currentAudio.pause()
     currentAudio.currentTime = 0
     currentAudio = null
   }
+}
+
+export function stopUnitAudio(): void {
+  sequenceAbort?.()
+  sequenceAbort = null
+  stopCurrentClip()
 }
 
 /** @deprecated use stopUnitAudio */
@@ -56,7 +61,12 @@ export const stopLetterAudio = stopUnitAudio
 export function playUnitAudio(
   moduleId: string,
   unitId: string,
-  options?: { onEnd?: () => void; onError?: () => void },
+  options?: {
+    onEnd?: () => void
+    onError?: () => void
+    /** When false, only stops the current clip — keeps an active grapheme sequence alive */
+    interrupt?: boolean
+  },
 ): boolean {
   const url = audioUrl(moduleId, unitId)
   if (!url) {
@@ -64,7 +74,12 @@ export function playUnitAudio(
     return false
   }
 
-  stopUnitAudio()
+  if (options?.interrupt !== false) {
+    stopUnitAudio()
+  } else {
+    stopCurrentClip()
+  }
+
   const audio = new Audio(url)
   currentAudio = audio
   audio.onended = () => {
@@ -85,12 +100,27 @@ export function hasNativeWordRecording(wordId: string): boolean {
 
 export function hasGraphemeFallbackWord(wordId: string): boolean {
   if (hasNativeWordRecording(wordId)) return false
-  return Boolean(GRAPHENE_FALLBACKS[wordId]?.length)
+  return Boolean(getGraphemeFallbackSequence(wordId)?.length)
 }
 
 export function getGraphemeFallbackSequence(wordId: string): string[] | null {
   if (hasNativeWordRecording(wordId)) return null
-  return GRAPHENE_FALLBACKS[wordId] ?? null
+  const stored = GRAPHENE_FALLBACKS[wordId]
+  if (stored?.length) return stored
+  const node = getKnowledgeNode(wordId)
+  if (node) return buildAudioGraphemeSequence(node.label)
+  return null
+}
+
+/** Build a playable grapheme sequence for a surface form (letters + digraphs with recordings). */
+export function buildAudioGraphemeSequence(surface: string): string[] | null {
+  const ids = wordToAudioGraphemeIds(surface)
+  if (!ids.length) return null
+  for (const g of ids) {
+    const moduleId = (POLISH_DIGRAPH_IDS as Set<string>).has(g) ? 'digraphs' : 'alphabet'
+    if (!hasUnitRecording(moduleId, g)) return null
+  }
+  return ids
 }
 
 /** True only for native recordings — required for audio-based exercises. */
@@ -151,6 +181,7 @@ export function playWordAudio(
   }
 
   const gapMs = sequence.length > 12 ? 220 : 300
+  stopUnitAudio()
   sequenceAbort = playGraphemeSequence(sequence, {
     gapMs,
     onEnd: () => {
@@ -181,7 +212,7 @@ export function playGraphemeSequence(
 
   const abort = () => {
     cancelled = true
-    stopUnitAudio()
+    stopCurrentClip()
   }
 
   const playNext = () => {
@@ -196,6 +227,7 @@ export function playGraphemeSequence(
     options?.onStep?.(step)
     const moduleId = (POLISH_DIGRAPH_IDS as Set<string>).has(g) ? 'digraphs' : 'alphabet'
     const ok = playUnitAudio(moduleId, g, {
+      interrupt: false,
       onEnd: () => {
         if (cancelled) return
         setTimeout(playNext, gapMs)
