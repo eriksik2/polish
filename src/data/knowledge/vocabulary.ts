@@ -15,9 +15,10 @@ function w(
   meaning: string,
   tags: VocabEntry['tags'],
   tip?: string,
+  id?: string,
 ): VocabEntry {
   return {
-    id: wordIdFromSurface(surface),
+    id: id ?? wordIdFromSurface(surface),
     surface,
     meaning,
     kind: 'word',
@@ -79,9 +80,9 @@ export const VOCABULARY: VocabEntry[] = [
   w('pani', 'Mrs / madam (formal you, feminine)', ['politeness']),
   phrase('co słychać?', "what's up? / how are things?", ['co', 'slychac'], ['greeting', 'question'], 'Literally “what can be heard?”.'),
   w('słychać', 'to be heard', ['common']),
-  phrase('wszystko w porządku?', 'is everything OK?', ['wszystko', 'w', 'porzadku'], ['greeting', 'question']),
+  phrase('wszystko w porządku?', 'is everything OK?', ['wszystko', 'w-prep', 'porzadku'], ['greeting', 'question']),
   w('wszystko', 'everything', ['common']),
-  w('w', 'in / at', ['common']),
+  w('w', 'in / at', ['common'], undefined, 'w-prep'),
   w('porządku', 'order (locative of porządek)', ['common']),
 
   // — Politeness & responses —
@@ -99,7 +100,7 @@ export const VOCABULARY: VocabEntry[] = [
   w('oczywiście', 'of course', ['response']),
   w('dobrze', 'fine / well / OK', ['response']),
   w('świetnie', 'great / excellent', ['response']),
-  phrase('w porządku', 'all right / fine', ['w', 'porzadku'], ['response']),
+  phrase('w porządku', 'all right / fine', ['w-prep', 'porzadku'], ['response']),
   w('rozumiem', 'I understand', ['response']),
   phrase('nie rozumiem', "I don't understand", ['nie', 'rozumiem'], ['response']),
   phrase('mówisz po angielsku?', 'do you speak English?', ['mowisz', 'po', 'angielsku'], ['question']),

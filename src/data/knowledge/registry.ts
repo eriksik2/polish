@@ -36,7 +36,18 @@ function moduleForGrapheme(g: string): 'alphabet' | 'digraphs' {
   return g in DIGRAPH_LETTER_PARTS ? 'digraphs' : 'alphabet'
 }
 
+function isSoundNode(nodes: Map<string, KnowledgeNode>, id: string): boolean {
+  const node = nodes.get(id)
+  return node?.kind === 'letter' || node?.kind === 'digraph'
+}
+
 function registerVocabNode(nodes: Map<string, KnowledgeNode>, entry: VocabEntry): void {
+  const existing = nodes.get(entry.id)
+  if (existing?.kind === 'letter' || existing?.kind === 'digraph') {
+    throw new Error(
+      `Vocabulary "${entry.surface}" id "${entry.id}" collides with ${existing.kind} node — assign a distinct id`,
+    )
+  }
   const graphemeIds = tokenizeGraphemes(entry.surface)
   nodes.set(entry.id, {
     id: entry.id,
@@ -118,6 +129,7 @@ function buildGraph(): { nodes: Map<string, KnowledgeNode>; links: KnowledgeLink
     if (entry.kind !== 'phrase') {
       for (let i = 0; i < node.graphemeIds!.length; i++) {
         const g = node.graphemeIds![i]
+        if (!isSoundNode(nodes, g)) continue
         addLink({ from: entry.id, to: g, kind: 'contains', index: i })
       }
     }
@@ -180,6 +192,7 @@ function buildGraph(): { nodes: Map<string, KnowledgeNode>; links: KnowledgeLink
     addLink({ from: form.id, to: form.lemmaId, kind: 'inflection_of' })
     for (let i = 0; i < tokenizeGraphemes(form.surface).length; i++) {
       const g = tokenizeGraphemes(form.surface)[i]
+      if (!isSoundNode(nodes, g)) continue
       addLink({ from: form.id, to: g, kind: 'contains', index: i })
     }
   }
