@@ -1,18 +1,24 @@
 import { POLISH_ALPHABET } from '../data/alphabet'
 import { POLISH_DIGRAPHS } from '../data/digraphs'
-import { BASIC_WORD_ENTRIES } from '../data/basicWords'
 import type { PolishLetter } from '../data/alphabet'
 import { getUnit } from '../data/moduleRegistry'
+import {
+  getKnowledgeNode,
+  getOutgoingLinks,
+  KNOWLEDGE_NODES,
+  wordIdFromSurface,
+} from '../data/knowledge/registry'
+import type { KnowledgeKind, VocabTag } from '../data/knowledge/types'
 import { hasWordRecording } from '../lib/speech/audio'
 import { pickSimilarUnits, scoreWordAsDistractor, similarUnitIds } from '../lib/similarity'
 import {
-  findHighlightIndex,
-  graphemeAtIndex,
   highlightToUnitId,
   POLISH_DIGRAPH_IDS,
   tokenizeGraphemes,
   wordContainsUnit,
 } from '../lib/graphemes'
+
+export { wordIdFromSurface as wordIdFromWord }
 
 export interface WordUnitLink {
   unitId: string
@@ -29,111 +35,67 @@ export interface WordEntry {
   /** Which units this word can teach (with highlight position) */
   unitLinks: WordUnitLink[]
   modules: ('alphabet' | 'digraphs' | 'basic-words')[]
-}
-
-export function wordIdFromWord(word: string): string {
-  return word
-    .toLowerCase()
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .replace(/ł/g, 'l')
-}
-
-function slugify(word: string): string {
-  return wordIdFromWord(word)
+  kind?: 'word' | 'phrase'
+  wordIds?: string[]
+  tags?: VocabTag[]
+  tip?: string
 }
 
 function moduleForUnit(unitId: string): 'alphabet' | 'digraphs' {
   return POLISH_DIGRAPHS.some((d) => d.id === unitId) ? 'digraphs' : 'alphabet'
 }
 
-function buildEntry(
-  word: string,
-  meaning: string,
-  unitId: string,
-  highlight: string,
-): WordEntry {
-  const graphemes = tokenizeGraphemes(word)
-  const index = findHighlightIndex(word, highlight)
-  const grapheme = graphemeAtIndex(word, index)
-  const expectedUnit = highlightToUnitId(highlight)
+function buildFromKnowledge(): WordEntry[] {
+  const entries: WordEntry[] = []
 
-  if (grapheme !== expectedUnit && grapheme !== unitId && grapheme !== highlight.toLowerCase()) {
-    // Allow dzi spelling: grapheme at 0 might be 'dz' but unit is dź
-    if (!(unitId === 'dź' && word.toLowerCase().startsWith('dzi'))) {
-      throw new Error(
-        `Word "${word}": grapheme "${grapheme}" at ${index} does not match unit "${unitId}" (highlight "${highlight}")`,
-      )
+  for (const node of KNOWLEDGE_NODES.values()) {
+    if (node.kind !== 'word' && node.kind !== 'phrase' && node.kind !== 'case') continue
+
+    const teachesLinks = getIncomingLinksFromUnits(node.id)
+
+    const modules = new Set<'alphabet' | 'digraphs' | 'basic-words'>()
+    for (const link of teachesLinks) {
+      modules.add(moduleForUnit(link.unitId))
     }
+
+    const vocabEntry = node.kind === 'case' ? undefined : getKnowledgeNode(node.id)
+    const isBasic = vocabEntry && (vocabEntry.tags?.some((t) => t !== 'phonics') ?? false)
+    if (isBasic || node.kind === 'phrase') modules.add('basic-words')
+    if (node.kind === 'case') modules.add('basic-words')
+
+    entries.push({
+      id: node.id,
+      word: node.label,
+      meaning: node.meaning ?? '',
+      graphemes: node.graphemeIds ?? tokenizeGraphemes(node.label),
+      unitLinks: teachesLinks,
+      modules: [...modules],
+      kind: node.kind === 'case' ? 'word' : node.kind,
+      wordIds: node.wordIds,
+      tags: node.tags,
+      tip: node.tip,
+    })
   }
 
-  if (!wordContainsUnit(word, unitId)) {
-    throw new Error(`Word "${word}" does not contain unit "${unitId}"`)
-  }
-
-  const id = slugify(word)
-  return {
-    id,
-    word,
-    meaning,
-    graphemes,
-    unitLinks: [{ unitId, index }],
-    modules: [moduleForUnit(unitId)],
-  }
+  return entries
 }
 
-function mergeEntries(entries: WordEntry[]): WordEntry[] {
-  const map = new Map<string, WordEntry>()
-
-  for (const e of entries) {
-    const existing = map.get(e.id)
-    if (!existing) {
-      map.set(e.id, { ...e, unitLinks: [...e.unitLinks], modules: [...e.modules] })
-      continue
-    }
-    for (const link of e.unitLinks) {
-      if (!existing.unitLinks.some((l) => l.unitId === link.unitId && l.index === link.index)) {
-        existing.unitLinks.push(link)
-      }
-    }
-    for (const m of e.modules) {
-      if (!existing.modules.includes(m)) existing.modules.push(m)
+function getIncomingLinksFromUnits(wordId: string): WordUnitLink[] {
+  const links: WordUnitLink[] = []
+  for (const unit of [...POLISH_ALPHABET, ...POLISH_DIGRAPHS]) {
+    const teachLink = getOutgoingLinks(unit.id, 'teaches').find((l) => l.to === wordId)
+    if (teachLink) {
+      links.push({
+        unitId: unit.id,
+        index: teachLink.index ?? 0,
+      })
     }
   }
-
-  return [...map.values()]
+  return links
 }
 
-function tryBuildEntry(
-  word: string,
-  meaning: string,
-  unitId: string,
-  highlight: string,
-): WordEntry | null {
-  try {
-    return buildEntry(word, meaning, unitId, highlight)
-  } catch {
-    return null
-  }
-}
-
-function buildFromUnits(units: PolishLetter[]): WordEntry[] {
-  const raw: WordEntry[] = []
-  for (const unit of units) {
-    for (const ex of unit.examples) {
-      const entry = tryBuildEntry(ex.word, ex.meaning, unit.id, ex.highlight)
-      if (entry) raw.push(entry)
-    }
-  }
-  return mergeEntries(raw)
-}
-
-/** Curated, verified vocabulary — grapheme sequences checked at build time */
-export const WORD_BANK: WordEntry[] = mergeEntries([
-  ...buildFromUnits(POLISH_ALPHABET),
-  ...buildFromUnits(POLISH_DIGRAPHS),
-  ...BASIC_WORD_ENTRIES,
-])
+/** Curated, verified vocabulary — built from the knowledge graph */
+export const WORD_BANK: WordEntry[] = buildFromKnowledge()
 
 export const WORD_MAP = new Map(WORD_BANK.map((w) => [w.id, w]))
 
@@ -350,7 +312,6 @@ export function pickWordOptions(
   const picked: WordEntry[] = []
   const used = new Set<string>()
 
-  // Prefer words with at least one similar grapheme (score ≥ 35 ≈ one confused neighbour)
   for (const { word, score } of ranked) {
     if (picked.length >= needed) break
     if (score < 35 && picked.length >= Math.min(2, needed)) continue
@@ -401,4 +362,21 @@ export function pickUnitOptionsForWord(
     correct,
     distractors: distractors.slice(0, count - 1),
   }
+}
+
+export function getEntriesByKnowledgeKind(kind: KnowledgeKind): WordEntry[] {
+  if (kind === 'letter' || kind === 'digraph') return []
+  if (kind === 'word') {
+    return WORD_BANK.filter(
+      (w) => w.kind !== 'phrase' && w.modules.includes('basic-words'),
+    )
+  }
+  if (kind === 'phrase') return WORD_BANK.filter((w) => w.kind === 'phrase')
+  if (kind === 'case') {
+    return [...KNOWLEDGE_NODES.values()]
+      .filter((n) => n.kind === 'case')
+      .map((n) => WORD_MAP.get(n.id))
+      .filter((w): w is WordEntry => Boolean(w))
+  }
+  return []
 }

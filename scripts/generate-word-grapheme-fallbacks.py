@@ -17,17 +17,30 @@ ROOT = Path(__file__).resolve().parents[1]
 MANIFEST = ROOT / "src" / "data" / "word-audio-manifest.json"
 LETTER_MANIFEST = ROOT / "src" / "data" / "letter-audio-manifest.json"
 DIGRAPH_MANIFEST = ROOT / "src" / "data" / "digraph-audio-manifest.json"
+VOCAB = ROOT / "src" / "data" / "knowledge" / "vocabulary.ts"
 OUT = ROOT / "src" / "data" / "word-grapheme-fallbacks.json"
 
 MULTIGRAPHS = ["dź", "dż", "dz", "ch", "cz", "rz", "sz"]
 DIGRAPH_IDS = set(MULTIGRAPHS)
 LETTER_OK = re.compile(r"[a-ząćęłńóśźż]$")
 
+SPELLING_TO_PHONEME = {
+    "dzi": "dź",
+    "ci": "ć",
+    "si": "ś",
+    "zi": "ź",
+    "ni": "ń",
+}
+
 
 def slug(word: str) -> str:
     s = unicodedata.normalize("NFD", word.lower())
     s = "".join(c for c in s if unicodedata.category(c) != "Mn")
     return s.replace("ł", "l")
+
+
+def highlight_to_unit(h: str) -> str:
+    return SPELLING_TO_PHONEME.get(h, h)
 
 
 def tokenize_graphemes(word: str) -> list[str]:
@@ -49,27 +62,55 @@ def tokenize_graphemes(word: str) -> list[str]:
     return tokens
 
 
-def playable_graphemes(word: str, letters: set[str], digraphs: set[str]) -> list[str] | None:
+def graphemes_to_audio_ids(graphemes: list[str]) -> list[str]:
+    out: list[str] = []
+    i = 0
+    while i < len(graphemes):
+        triple = graphemes[i] + (graphemes[i + 1] if i + 1 < len(graphemes) else "") + (
+            graphemes[i + 2] if i + 2 < len(graphemes) else ""
+        )
+        pair = graphemes[i] + (graphemes[i + 1] if i + 1 < len(graphemes) else "")
+        if triple in SPELLING_TO_PHONEME:
+            out.append(SPELLING_TO_PHONEME[triple])
+            i += 3
+        elif pair in SPELLING_TO_PHONEME:
+            out.append(SPELLING_TO_PHONEME[pair])
+            i += 2
+        else:
+            out.append(highlight_to_unit(graphemes[i]))
+            i += 1
+    return out
+
+
+def word_to_audio_grapheme_ids(word: str) -> list[str]:
     sequence: list[str] = []
     for part in word.strip().split():
-        for g in tokenize_graphemes(part):
-            if g in DIGRAPH_IDS:
-                if g not in digraphs:
-                    return None
-            elif not LETTER_OK.match(g):
-                continue
-            elif g not in letters:
+        clean = re.sub(r"[^\wąćęłńóśźż]", "", part, flags=re.IGNORECASE)
+        if not clean:
+            continue
+        sequence.extend(graphemes_to_audio_ids(tokenize_graphemes(clean)))
+    return sequence
+
+
+def playable_graphemes(word: str, letters: set[str], digraphs: set[str]) -> list[str] | None:
+    sequence = word_to_audio_grapheme_ids(word)
+    for g in sequence:
+        if g in DIGRAPH_IDS:
+            if g not in digraphs:
                 return None
-            sequence.append(g)
+        elif not LETTER_OK.match(g):
+            return None
+        elif g not in letters:
+            return None
     return sequence if sequence else None
 
 
-def load_basic_words() -> list[tuple[str, str]]:
-    """Parse BASIC_WORDS from basicWords.ts without importing TS."""
-    src = (ROOT / "src" / "data" / "basicWords.ts").read_text()
+def load_vocabulary() -> list[tuple[str, str]]:
+    """Parse VOCABULARY from knowledge/vocabulary.ts."""
+    src = VOCAB.read_text()
     words: list[tuple[str, str]] = []
     pattern = re.compile(
-        r"bw\(\s*'((?:\\'|[^'])*)'\s*,\s*(?:'((?:\\'|[^'])*)'|\"((?:\\\"|[^\"])*)\")",
+        r"(?:w|phrase)\(\s*'((?:\\'|[^'])*)'\s*,\s*(?:'((?:\\'|[^'])*)'|\"((?:\\\"|[^\"])*)\")",
     )
     for m in pattern.finditer(src):
         word = m.group(1).replace("\\'", "'")
@@ -85,7 +126,7 @@ def main() -> None:
     fallbacks: dict[str, list[str]] = {}
     skipped: list[str] = []
 
-    for word_id, surface in load_basic_words():
+    for word_id, surface in load_vocabulary():
         if word_id in native:
             continue
         seq = playable_graphemes(surface, letters, digraphs)

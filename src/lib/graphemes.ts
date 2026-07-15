@@ -104,6 +104,51 @@ function isVowel(ch: string): boolean {
   return 'aąeęioóuy'.includes(ch)
 }
 
+/** Spelling digraphs that map to a single phoneme unit for audio playback */
+const SPELLING_TO_PHONEME: Record<string, string> = {
+  dzi: 'dź',
+  ci: 'ć',
+  si: 'ś',
+  zi: 'ź',
+  ni: 'ń',
+}
+
+/**
+ * Convert tokenized graphemes to audio unit ids (letters/digraphs with recordings).
+ * Merges soft spelling pairs (si→ś, ci→ć, etc.) so composed playback matches pronunciation.
+ */
+export function graphemesToAudioIds(graphemes: string[]): string[] {
+  const out: string[] = []
+  let i = 0
+  while (i < graphemes.length) {
+    const pair = graphemes[i] + (graphemes[i + 1] ?? '')
+    const triple = graphemes[i] + (graphemes[i + 1] ?? '') + (graphemes[i + 2] ?? '')
+    if (SPELLING_TO_PHONEME[triple]) {
+      out.push(SPELLING_TO_PHONEME[triple])
+      i += 3
+    } else if (SPELLING_TO_PHONEME[pair]) {
+      out.push(SPELLING_TO_PHONEME[pair])
+      i += 2
+    } else {
+      out.push(highlightToUnitId(graphemes[i]))
+      i += 1
+    }
+  }
+  return out
+}
+
+/** Tokenize a word (or phrase) into audio-ready grapheme unit ids. */
+export function wordToAudioGraphemeIds(word: string): string[] {
+  const parts = word.trim().split(/\s+/)
+  const sequence: string[] = []
+  for (const part of parts) {
+    const clean = part.replace(/[^\p{L}]/gu, '')
+    if (!clean) continue
+    sequence.push(...graphemesToAudioIds(tokenizeGraphemes(clean)))
+  }
+  return sequence
+}
+
 /** Render word with one grapheme index highlighted for display */
 export function renderHighlightedWord(word: string, highlightIndex: number): {
   before: string

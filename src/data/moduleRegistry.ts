@@ -100,7 +100,7 @@ export function getDistractorUnits(
 }
 
 export function getUnitDisplayLabel(moduleId: string, unitId: string): string {
-  if (moduleId === 'basic-words') return getBasicWord(unitId)?.word ?? unitId
+  if (moduleId === 'basic-words') return getBasicWord(unitId)?.surface ?? unitId
   return getUnit(moduleId, unitId)?.upper ?? unitId
 }
 
