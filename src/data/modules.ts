@@ -10,6 +10,10 @@ export type ExerciseFormat =
   | 'hear-word-pick-letter'
   | 'hear-word-build-sequence'
   | 'hear-sequence-pick-word'
+  | 'vocab-pick-meaning'
+  | 'vocab-meaning-pick-word'
+  | 'vocab-hear-pick-meaning'
+  | 'vocab-hear-pick-word'
 
 /** Formats turned off for new users — enable in Settings */
 export const FORMATS_DISABLED_BY_DEFAULT = new Set<ExerciseFormat>([
@@ -102,6 +106,34 @@ export const EXERCISE_FORMATS: {
     description: 'Hear graphemes played one after another → pick the written word',
     detail: 'Letters/digraphs play in sequence; you pick the written word they spell. Strong decoding practice.',
   },
+  {
+    id: 'vocab-pick-meaning',
+    label: 'Word → pick meaning',
+    shortLabel: 'L',
+    description: 'See a Polish word → pick the English meaning',
+    detail: 'Read a Polish word and choose the correct English translation from similar options.',
+  },
+  {
+    id: 'vocab-meaning-pick-word',
+    label: 'Meaning → pick word',
+    shortLabel: 'M',
+    description: 'See English → pick the Polish word',
+    detail: 'Given an English meaning, choose the matching Polish word. Core vocabulary recall.',
+  },
+  {
+    id: 'vocab-hear-pick-meaning',
+    label: 'Hear word → pick meaning',
+    shortLabel: 'N',
+    description: 'Hear a Polish word → pick the English meaning',
+    detail: 'Listen to a word and choose what it means in English.',
+  },
+  {
+    id: 'vocab-hear-pick-word',
+    label: 'Hear word → pick Polish',
+    shortLabel: 'O',
+    description: 'Hear a Polish word → pick how it is written',
+    detail: 'Listen and choose the correct Polish spelling from similar-looking options.',
+  },
 ]
 
 export interface ModuleInfo {
@@ -125,6 +157,13 @@ export const MODULES: ModuleInfo[] = [
     title: 'Digraphs',
     description: 'Master ch, cz, dz, dź, dż, rz, sz — two-letter sound pairs',
     icon: 'sz',
+    available: true,
+  },
+  {
+    id: 'basic-words',
+    title: 'Basic Words',
+    description: 'Essential greetings, numbers, and everyday vocabulary',
+    icon: '👋',
     available: true,
   },
 ]

@@ -1,5 +1,5 @@
 import { getWord } from '../data/wordBank'
-import { getUnit } from '../data/moduleRegistry'
+import { getUnit, isVocabModule } from '../data/moduleRegistry'
 import type { Exercise } from '../lib/exercises'
 import {
   checkLetterInput,
@@ -41,7 +41,7 @@ export function ExerciseCard({
   itemTimeLimitSec = null,
 }: ExerciseCardProps) {
   const { settings } = useSettings()
-  const { openLesson } = useLessonDrawer()
+  const { openLesson, openWord } = useLessonDrawer()
   const [startTime] = useState(Date.now())
   const [selected, setSelected] = useState<number | null>(null)
   const [previewSelected, setPreviewSelected] = useState<number | null>(null)
@@ -77,6 +77,13 @@ export function ExerciseCard({
 
   const usesSequenceBuild = exercise.format === 'hear-word-build-sequence'
 
+  const usesVocabMeaningOptions =
+    exercise.format === 'vocab-pick-meaning' || exercise.format === 'vocab-hear-pick-meaning'
+  const usesVocabWordOptions =
+    exercise.format === 'vocab-meaning-pick-word' || exercise.format === 'vocab-hear-pick-word'
+  const usesVocabHear =
+    exercise.format === 'vocab-hear-pick-meaning' || exercise.format === 'vocab-hear-pick-word'
+
   const usesAudio =
     exercise.format === 'pick-audio' ||
     exercise.format === 'hear-pick-letter' ||
@@ -84,7 +91,8 @@ export function ExerciseCard({
     exercise.format === 'hear-unit-pick-word' ||
     exercise.format === 'hear-word-pick-letter' ||
     exercise.format === 'hear-word-build-sequence' ||
-    exercise.format === 'hear-sequence-pick-word'
+    exercise.format === 'hear-sequence-pick-word' ||
+    usesVocabHear
 
   const selectedIndex = usesPreviewConfirm ? previewSelected : selected
 
@@ -140,7 +148,8 @@ export function ExerciseCard({
       exercise.format === 'hear-unit-pick-word' ||
       exercise.format === 'hear-word-pick-letter' ||
       exercise.format === 'hear-word-build-sequence' ||
-      exercise.format === 'hear-sequence-pick-word'
+      exercise.format === 'hear-sequence-pick-word' ||
+      usesVocabHear
     ) {
       const timer = setTimeout(() => playPromptAudio(), 400)
       return () => clearTimeout(timer)
@@ -172,7 +181,8 @@ export function ExerciseCard({
     }
     if (
       (exercise.format === 'hear-word-pick-letter' ||
-        exercise.format === 'hear-word-build-sequence') &&
+        exercise.format === 'hear-word-build-sequence' ||
+        usesVocabHear) &&
       exercise.targetWordId
     ) {
       setPlayingIndex(-1)
@@ -431,7 +441,10 @@ export function ExerciseCard({
     exercise.format !== 'word-pick-unit' &&
     exercise.format !== 'hear-word-pick-letter' &&
     exercise.format !== 'hear-word-build-sequence' &&
-    exercise.format !== 'hear-sequence-pick-word'
+    exercise.format !== 'hear-sequence-pick-word' &&
+    exercise.format !== 'vocab-hear-pick-meaning' &&
+    exercise.format !== 'vocab-hear-pick-word' &&
+    exercise.format !== 'vocab-meaning-pick-word'
 
   const usedTileSet = new Set(builtTileIds)
 
@@ -445,7 +458,11 @@ export function ExerciseCard({
 
       <div className={`space-y-4 ${cardShake}`}>
         <div className="flex items-start justify-between gap-2">
-          <p className="text-sm text-slate-400">{exercise.prompt}</p>
+          <p className="text-sm text-slate-400">
+            {exercise.format === 'vocab-meaning-pick-word'
+              ? 'Pick the Polish word'
+              : exercise.prompt}
+          </p>
           <div className="flex shrink-0 items-center gap-2">
             {itemRemaining !== null && !submitted && (
               <span
@@ -459,7 +476,11 @@ export function ExerciseCard({
             {!noHelp && (
               <button
                 type="button"
-                onClick={() => openLesson(exercise.moduleId, [exercise.letterId])}
+                onClick={() =>
+                  isVocabModule(exercise.moduleId)
+                    ? openWord(exercise.moduleId, exercise.letterId)
+                    : openLesson(exercise.moduleId, [exercise.letterId])
+                }
                 className="rounded-lg bg-slate-800 px-2.5 py-1 text-xs text-red-400"
               >
                 📖 Info
@@ -470,7 +491,19 @@ export function ExerciseCard({
 
         {showLetter && (
           <div className="flex justify-center py-4">
-            <span className="text-7xl font-serif text-red-400">{exercise.letter.upper}</span>
+            <span
+              className={`font-serif text-red-400 ${
+                isVocabModule(exercise.moduleId) ? 'text-4xl text-center' : 'text-7xl'
+              }`}
+            >
+              {exercise.letter.upper}
+            </span>
+          </div>
+        )}
+
+        {exercise.format === 'vocab-meaning-pick-word' && (
+          <div className="flex justify-center py-4">
+            <p className="text-2xl font-medium text-center text-slate-100">{exercise.prompt}</p>
           </div>
         )}
 
@@ -479,7 +512,8 @@ export function ExerciseCard({
           exercise.format === 'hear-unit-pick-word' ||
           exercise.format === 'hear-word-pick-letter' ||
           exercise.format === 'hear-word-build-sequence' ||
-          exercise.format === 'hear-sequence-pick-word') && (
+          exercise.format === 'hear-sequence-pick-word' ||
+          usesVocabHear) && (
           <div className="flex flex-col items-center gap-2">
             <button
               type="button"
@@ -494,7 +528,9 @@ export function ExerciseCard({
                 ? `Playing ${(sequenceStep ?? 0) + 1}/${exercise.playSequence?.length ?? '?'}…`
                 : played
                   ? 'Play again'
-                  : exercise.format === 'hear-sequence-pick-word'
+                  : usesVocabHear
+                    ? 'Play word'
+                    : exercise.format === 'hear-sequence-pick-word'
                     ? 'Play sounds'
                     : 'Play word'}
             </button>
@@ -514,7 +550,55 @@ export function ExerciseCard({
           </div>
         )}
 
-        {exercise.options && !usesPreviewConfirm && !usesWordOptions && (
+        {exercise.options && usesVocabMeaningOptions && (
+          <div className="grid gap-2">
+            {exercise.options.map((opt, i) => (
+              <button
+                key={opt.id}
+                type="button"
+                disabled={submitted}
+                onClick={() => handleOptionSelect(i)}
+                className={`rounded-xl border px-4 py-3.5 text-left text-sm transition-all active:scale-[0.98] ${
+                  submitted
+                    ? i === exercise.correctIndex
+                      ? 'border-green-500 bg-green-500/20'
+                      : selectedIndex === i
+                        ? 'border-red-500 bg-red-500/20'
+                        : 'border-slate-700 bg-slate-800/50'
+                    : 'border-slate-700 bg-slate-800 hover:border-slate-500'
+                }`}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
+        )}
+
+        {exercise.options && usesVocabWordOptions && (
+          <div className="grid gap-2">
+            {exercise.options.map((opt, i) => (
+              <button
+                key={opt.id}
+                type="button"
+                disabled={submitted}
+                onClick={() => handleOptionSelect(i)}
+                className={`rounded-xl border px-4 py-3.5 text-left transition-all active:scale-[0.98] ${
+                  submitted
+                    ? i === exercise.correctIndex
+                      ? 'border-green-500 bg-green-500/20'
+                      : selectedIndex === i
+                        ? 'border-red-500 bg-red-500/20'
+                        : 'border-slate-700 bg-slate-800/50'
+                    : 'border-slate-700 bg-slate-800 hover:border-slate-500'
+                }`}
+              >
+                <span className="text-xl font-serif">{opt.label}</span>
+              </button>
+            ))}
+          </div>
+        )}
+
+        {exercise.options && !usesPreviewConfirm && !usesWordOptions && !usesVocabMeaningOptions && !usesVocabWordOptions && (
           <div className="grid gap-2">
             {exercise.options.map((opt, i) => (
               <button

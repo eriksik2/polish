@@ -11,6 +11,7 @@ interface LessonSectionPracticeProps {
   preset: LessonPracticePreset
   title: string
   popQuestions?: LessonPopQuestion[]
+  wordPool?: string[]
   onComplete: (passed: boolean, wrongUnitIds: string[]) => void
   onCancel: () => void
 }
@@ -19,12 +20,18 @@ type QuizItem =
   | { kind: 'exercise'; moduleId: string; letterId: string; format: LessonPracticePreset['formats'][number] }
   | { kind: 'pop'; question: LessonPopQuestion }
 
+function presetUnitIds(preset: LessonPracticePreset): string[] {
+  if (preset.wordIds?.length) return preset.wordIds
+  return preset.unitIds
+}
+
 function buildExercisePool(
   moduleId: string,
   preset: LessonPracticePreset,
 ): QuizItem[] {
   const pool: QuizItem[] = []
-  for (const letterId of preset.unitIds) {
+  const ids = presetUnitIds(preset)
+  for (const letterId of ids) {
     for (const format of preset.formats) {
       pool.push({ kind: 'exercise', moduleId, letterId, format })
     }
@@ -78,6 +85,7 @@ export function LessonSectionPractice({
   preset,
   title,
   popQuestions = [],
+  wordPool,
   onComplete,
   onCancel,
 }: LessonSectionPracticeProps) {
@@ -97,13 +105,20 @@ export function LessonSectionPractice({
 
   const currentItem = queue[index]
 
+  const vocabPool = wordPool ?? preset.wordIds ?? []
+
   const loadExerciseAt = useCallback(
     (idx: number) => {
       const item = queue[idx]
       if (!item || item.kind !== 'exercise') return null
-      return generateExercise(item.moduleId, item.letterId, item.format)
+      return generateExercise(
+        item.moduleId,
+        item.letterId,
+        item.format,
+        vocabPool.length > 0 ? vocabPool : undefined,
+      )
     },
-    [queue],
+    [queue, vocabPool],
   )
 
   useEffect(() => {

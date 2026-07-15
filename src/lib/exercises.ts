@@ -1,10 +1,22 @@
 import {
   getUnit,
   isDigraphModule,
+  isVocabModule,
   type PolishLetter,
 } from '../data/moduleRegistry'
 import type { ExerciseFormat } from '../data/modules'
-import { pickUnitOptionsForWord, pickWordOptions, pickWordOptionsWithAudio, pickWordWithAudio, buildGraphemeTiles, type GraphemeTile } from '../data/wordBank'
+import {
+  pickUnitOptionsForWord,
+  pickWordOptions,
+  pickWordOptionsWithAudio,
+  pickWordWithAudio,
+  buildGraphemeTiles,
+  getWord,
+  getWordsForModule,
+  pickVocabMeaningOptions,
+  pickVocabWordOptions,
+  type GraphemeTile,
+} from '../data/wordBank'
 import { pickSimilarLabels, pickSimilarUnits } from '../lib/similarity'
 import { shuffle } from './scheduler'
 
@@ -45,7 +57,12 @@ export function generateExercise(
   moduleId: string,
   letterId: string,
   format: ExerciseFormat,
+  poolIds?: string[],
 ): Exercise | null {
+  if (isVocabModule(moduleId)) {
+    return generateVocabExercise(moduleId, letterId, format, poolIds)
+  }
+
   const letter = getUnit(moduleId, letterId)
   if (!letter) return null
 
@@ -76,6 +93,174 @@ export function generateExercise(
       return generateHearSequencePickWord(id, moduleId, letter)
     default:
       return null
+  }
+}
+
+function defaultVocabPool(): string[] {
+  return getWordsForModule('basic-words').map((w) => w.id)
+}
+
+function generateVocabExercise(
+  moduleId: string,
+  wordId: string,
+  format: ExerciseFormat,
+  poolIds?: string[],
+): Exercise | null {
+  const word = getWord(wordId)
+  const unit = getUnit(moduleId, wordId)
+  if (!word || !unit) return null
+
+  const pool = poolIds?.length ? poolIds : defaultVocabPool()
+  const id = `ex-${++exerciseCounter}-${Date.now()}`
+
+  switch (format) {
+    case 'vocab-pick-meaning':
+      return generateVocabPickMeaning(id, moduleId, unit, word, pool)
+    case 'vocab-meaning-pick-word':
+      return generateVocabMeaningPickWord(id, moduleId, unit, word, pool)
+    case 'vocab-hear-pick-meaning':
+      return generateVocabHearPickMeaning(id, moduleId, unit, word, pool)
+    case 'vocab-hear-pick-word':
+      return generateVocabHearPickWord(id, moduleId, unit, word, pool)
+    default:
+      return null
+  }
+}
+
+function generateVocabPickMeaning(
+  id: string,
+  moduleId: string,
+  unit: PolishLetter,
+  word: NonNullable<ReturnType<typeof getWord>>,
+  pool: string[],
+): Exercise | null {
+  const picked = pickVocabMeaningOptions(word.id, pool, 4)
+  if (!picked) return null
+
+  const options: ExerciseOption[] = shuffle([
+    { id: 'correct', label: picked.correct.meaning, wordId: picked.correct.id },
+    ...picked.distractors.map((w, i) => ({
+      id: `d${i}`,
+      label: w.meaning,
+      wordId: w.id,
+    })),
+  ])
+  const correctIndex = options.findIndex((o) => o.id === 'correct')
+
+  return {
+    id,
+    moduleId,
+    letterId: word.id,
+    format: 'vocab-pick-meaning',
+    letter: unit,
+    options,
+    correctAnswer: picked.correct.meaning,
+    correctIndex,
+    targetWordId: word.id,
+    prompt: 'What does this word mean?',
+  }
+}
+
+function generateVocabMeaningPickWord(
+  id: string,
+  moduleId: string,
+  unit: PolishLetter,
+  word: NonNullable<ReturnType<typeof getWord>>,
+  pool: string[],
+): Exercise | null {
+  const picked = pickVocabWordOptions(word.id, pool, 4)
+  if (!picked) return null
+
+  const options: ExerciseOption[] = shuffle([
+    { id: 'correct', label: picked.correct.word, wordId: picked.correct.id, meaning: picked.correct.meaning },
+    ...picked.distractors.map((w, i) => ({
+      id: `d${i}`,
+      label: w.word,
+      wordId: w.id,
+      meaning: w.meaning,
+    })),
+  ])
+  const correctIndex = options.findIndex((o) => o.id === 'correct')
+
+  return {
+    id,
+    moduleId,
+    letterId: word.id,
+    format: 'vocab-meaning-pick-word',
+    letter: unit,
+    options,
+    correctAnswer: picked.correct.word,
+    correctIndex,
+    targetWordId: word.id,
+    prompt: picked.correct.meaning,
+  }
+}
+
+function generateVocabHearPickMeaning(
+  id: string,
+  moduleId: string,
+  unit: PolishLetter,
+  word: NonNullable<ReturnType<typeof getWord>>,
+  pool: string[],
+): Exercise | null {
+  const picked = pickVocabMeaningOptions(word.id, pool, 4)
+  if (!picked) return null
+
+  const options: ExerciseOption[] = shuffle([
+    { id: 'correct', label: picked.correct.meaning, wordId: picked.correct.id },
+    ...picked.distractors.map((w, i) => ({
+      id: `d${i}`,
+      label: w.meaning,
+      wordId: w.id,
+    })),
+  ])
+  const correctIndex = options.findIndex((o) => o.id === 'correct')
+
+  return {
+    id,
+    moduleId,
+    letterId: word.id,
+    format: 'vocab-hear-pick-meaning',
+    letter: unit,
+    options,
+    correctAnswer: picked.correct.meaning,
+    correctIndex,
+    targetWordId: word.id,
+    prompt: 'Listen — what does this word mean?',
+  }
+}
+
+function generateVocabHearPickWord(
+  id: string,
+  moduleId: string,
+  unit: PolishLetter,
+  word: NonNullable<ReturnType<typeof getWord>>,
+  pool: string[],
+): Exercise | null {
+  const picked = pickVocabWordOptions(word.id, pool, 4)
+  if (!picked) return null
+
+  const options: ExerciseOption[] = shuffle([
+    { id: 'correct', label: picked.correct.word, wordId: picked.correct.id },
+    ...picked.distractors.map((w, i) => ({
+      id: `d${i}`,
+      label: w.word,
+      wordId: w.id,
+    })),
+  ])
+  const correctIndex = options.findIndex((o) => o.id === 'correct')
+
+  return {
+    id,
+    moduleId,
+    letterId: word.id,
+    format: 'vocab-hear-pick-word',
+    letter: unit,
+    options,
+    correctAnswer: picked.correct.word,
+    correctIndex,
+    targetWordId: word.id,
+    prompt: 'Listen — which word did you hear?',
   }
 }
 

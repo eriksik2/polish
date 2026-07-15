@@ -4,6 +4,7 @@ import { FINAL_QUIZ_SIZE, SECTION_QUIZ_SIZE } from '../../types/lesson'
 export const DIGRAPHS_LESSON: StructuredLesson = {
   id: 'digraphs-fundamentals',
   moduleId: 'digraphs',
+  category: 'first-steps',
   title: 'Polish Digraphs',
   subtitle: 'Two letters, one sound — ch, cz, sz, rz, dz, and more',
   estimatedMinutes: 35,

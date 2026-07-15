@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link, useParams, useNavigate } from 'react-router-dom'
-import { getLesson, sectionForUnit, STRUCTURED_LESSONS } from '../data/lessons'
+import { getLesson, lessonWordPool, sectionForUnit, LESSON_CATEGORIES, STRUCTURED_LESSONS } from '../data/lessons'
 import { LessonContent } from '../components/lesson/LessonContent'
 import { LessonSectionPractice } from '../components/lesson/LessonSectionPractice'
 import {
@@ -133,6 +133,7 @@ export function LessonPage() {
   }
 
   const completed = progress?.finalQuizPassed
+  const wordPool = lessonWordPool(lesson)
 
   return (
     <div className="p-4 space-y-5 pb-10">
@@ -254,6 +255,7 @@ export function LessonPage() {
           moduleId={lesson.moduleId}
           preset={section.practice}
           popQuestions={section.popQuestions}
+          wordPool={wordPool}
           title={`Practice: ${section.title}`}
           onComplete={handlePracticeComplete}
           onCancel={() => setPhase('read')}
@@ -264,6 +266,7 @@ export function LessonPage() {
         <LessonSectionPractice
           moduleId={lesson.moduleId}
           preset={lesson.finalQuiz}
+          wordPool={wordPool}
           title="Final quiz"
           onComplete={handlePracticeComplete}
           onCancel={() => setPhase('read')}
@@ -386,10 +389,22 @@ export function LearnPage() {
       </div>
 
       {tab === 'courses' && (
-        <section className="space-y-3">
-          {STRUCTURED_LESSONS.map((lesson) => (
-            <CourseCard key={lesson.id} lesson={lesson} progress={progressMap[lesson.id]} />
-          ))}
+        <section className="space-y-6">
+          {LESSON_CATEGORIES.map((category) => {
+            const lessons = STRUCTURED_LESSONS.filter((l) => l.category === category.id)
+            if (lessons.length === 0) return null
+            return (
+              <div key={category.id} className="space-y-3">
+                <div>
+                  <h2 className="text-sm font-semibold text-slate-200">{category.title}</h2>
+                  <p className="text-xs text-slate-500 mt-0.5">{category.description}</p>
+                </div>
+                {lessons.map((lesson) => (
+                  <CourseCard key={lesson.id} lesson={lesson} progress={progressMap[lesson.id]} />
+                ))}
+              </div>
+            )
+          })}
         </section>
       )}
 
@@ -409,6 +424,12 @@ export function LearnPage() {
             className="block rounded-xl border border-slate-700 bg-slate-800/50 px-4 py-3 text-sm"
           >
             Digraphs reference →
+          </Link>
+          <Link
+            to="/knowledge?module=basic-words"
+            className="block rounded-xl border border-slate-700 bg-slate-800/50 px-4 py-3 text-sm"
+          >
+            Basic words reference →
           </Link>
         </section>
       )}
