@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { ExerciseCard } from '../ExerciseCard'
 import { LessonPopQuestionCard } from './LessonPopQuestionCard'
 import { generateExercise } from '../../lib/exercises'
+import { isVocabHearFormat, hasNativeWordRecording } from '../../lib/speech/audio'
 import type { Exercise } from '../../lib/exercises'
 import type { LessonPopQuestion, LessonPracticePreset } from '../../types/lesson'
 import { shuffle } from '../../lib/scheduler'
@@ -33,6 +34,7 @@ function buildExercisePool(
   const ids = presetUnitIds(preset)
   for (const letterId of ids) {
     for (const format of preset.formats) {
+      if (isVocabHearFormat(format) && !hasNativeWordRecording(letterId)) continue
       pool.push({ kind: 'exercise', moduleId, letterId, format })
     }
   }

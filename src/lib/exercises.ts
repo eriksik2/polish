@@ -5,6 +5,7 @@ import {
   type PolishLetter,
 } from '../data/moduleRegistry'
 import type { ExerciseFormat } from '../data/modules'
+import { hasNativeWordRecording } from './speech/audio'
 import {
   pickUnitOptionsForWord,
   pickWordOptions,
@@ -119,8 +120,10 @@ function generateVocabExercise(
     case 'vocab-meaning-pick-word':
       return generateVocabMeaningPickWord(id, moduleId, unit, word, pool)
     case 'vocab-hear-pick-meaning':
+      if (!hasNativeWordRecording(word.id)) return null
       return generateVocabHearPickMeaning(id, moduleId, unit, word, pool)
     case 'vocab-hear-pick-word':
+      if (!hasNativeWordRecording(word.id)) return null
       return generateVocabHearPickWord(id, moduleId, unit, word, pool)
     default:
       return null
